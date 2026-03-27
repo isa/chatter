@@ -36,40 +36,45 @@ impl std::fmt::Display for ComputeBackend {
 /// Priority order per D-11: CUDA > MLX > MPS > CPU.
 /// MLX is preferred over MPS on Apple Silicon because mlx-audio uses less memory.
 pub fn detect_backend() -> Result<ComputeBackend, BridgeError> {
-    Python::attach(|py| {
-        // 1. Check CUDA
-        match try_detect_cuda(py) {
-            Ok(Some(backend)) => return Ok(backend),
-            Ok(None) => {} // CUDA not available, continue
-            Err(_) => {}   // torch not installed, will catch below
-        }
+    Python::attach(|py| detect_backend_inner(py))
+}
 
-        // 2. Check MLX (optional -- only on Apple Silicon with mlx installed)
-        match try_detect_mlx(py) {
-            Ok(Some(backend)) => return Ok(backend),
-            Ok(None) => {} // MLX not available
-            Err(_) => {}   // mlx not installed, skip
-        }
+/// Inner detection logic that runs within an existing GIL context.
+/// This can be called from within another `Python::attach` closure
+/// to avoid nested GIL acquisition.
+pub(crate) fn detect_backend_inner(py: pyo3::Python<'_>) -> Result<ComputeBackend, BridgeError> {
+    // 1. Check CUDA
+    match try_detect_cuda(py) {
+        Ok(Some(backend)) => return Ok(backend),
+        Ok(None) => {} // CUDA not available, continue
+        Err(_) => {}   // torch not installed, will catch below
+    }
 
-        // 3. Check MPS (Apple Silicon via PyTorch)
-        match try_detect_mps(py) {
-            Ok(Some(backend)) => return Ok(backend),
-            Ok(None) => {} // MPS not available
-            Err(_) => {}   // torch not installed
-        }
+    // 2. Check MLX (optional -- only on Apple Silicon with mlx installed)
+    match try_detect_mlx(py) {
+        Ok(Some(backend)) => return Ok(backend),
+        Ok(None) => {} // MLX not available
+        Err(_) => {}   // mlx not installed, skip
+    }
 
-        // 4. Verify torch is at least importable for CPU fallback
-        match py.import("torch") {
-            Ok(_) => Ok(ComputeBackend::Cpu),
-            Err(e) => {
-                if e.is_instance_of::<pyo3::exceptions::PyModuleNotFoundError>(py) {
-                    Err(BridgeError::QwenTtsNotInstalled)
-                } else {
-                    Err(BridgeError::Python(e))
-                }
+    // 3. Check MPS (Apple Silicon via PyTorch)
+    match try_detect_mps(py) {
+        Ok(Some(backend)) => return Ok(backend),
+        Ok(None) => {} // MPS not available
+        Err(_) => {}   // torch not installed
+    }
+
+    // 4. Verify torch is at least importable for CPU fallback
+    match py.import("torch") {
+        Ok(_) => Ok(ComputeBackend::Cpu),
+        Err(e) => {
+            if e.is_instance_of::<pyo3::exceptions::PyModuleNotFoundError>(py) {
+                Err(BridgeError::QwenTtsNotInstalled)
+            } else {
+                Err(BridgeError::Python(e))
             }
         }
-    })
+    }
 }
 
 /// Try to detect a CUDA GPU via PyTorch.
