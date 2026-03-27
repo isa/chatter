@@ -51,9 +51,9 @@ fn ensure_venv(cli: &Cli) -> anyhow::Result<()> {
         .to_string();
     eprintln!("{note} Setting up Chatter environment (first run only)...\n");
 
-    let spinner = ui::create_spinner("Creating Python environment and installing dependencies");
+    let spinner = ui::create_spinner("Creating Python environment and installing dependencies...");
 
-    match bridge::create_venv() {
+    match bridge::create_venv(Some(&spinner)) {
         Ok(venv_path) => {
             spinner.finish_with_message("Environment ready");
             if cli.global.verbose {
