@@ -93,22 +93,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-04 | Phase 2 | Pending |
 | PROF-05 | Phase 2 | Pending |
 | PROF-06 | Phase 2 | Pending |
-| GEN-01 | Phase 3 | Pending |
+| GEN-01 | Phase 2 | Pending |
 | GEN-02 | Phase 3 | Pending |
 | GEN-03 | Phase 3 | Pending |
 | GEN-04 | Phase 3 | Pending |
-| GEN-05 | Phase 3 | Pending |
-| GEN-06 | Phase 3 | Pending |
+| GEN-05 | Phase 2 | Pending |
+| GEN-06 | Phase 2 | Pending |
 | UX-01 | Phase 1 | Pending |
-| UX-02 | Phase 3 | Pending |
+| UX-02 | Phase 2 | Pending |
 | UX-03 | Phase 2 | Pending |
 | UX-04 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 21 total
 - Mapped to phases: 21
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-27*
-*Last updated: 2026-03-27 after initial definition*
+*Last updated: 2026-03-27 after roadmap creation*
