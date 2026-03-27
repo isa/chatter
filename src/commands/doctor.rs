@@ -1,6 +1,7 @@
 use owo_colors::{OwoColorize, Stream};
 use pyo3::prelude::*;
 
+use crate::bridge;
 use crate::bridge::doctor::get_system_info;
 use crate::bridge::runtime::ComputeBackend;
 use crate::cli::GlobalArgs;
@@ -16,6 +17,21 @@ pub fn run(global: &GlobalArgs) -> anyhow::Result<()> {
     let info = get_system_info();
     let mut passes = 0u32;
     let mut fails = 0u32;
+
+    // Managed Venv
+    if bridge::is_venv_ready() {
+        let venv_display = bridge::venv_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| "unknown".to_string());
+        ui::doctor_pass("Venv", &venv_display);
+        passes += 1;
+    } else {
+        ui::doctor_fail(
+            "Venv",
+            "not set up \u{2014} run any command to auto-create, or `chatter doctor` again after installing Python 3.12+",
+        );
+        fails += 1;
+    }
 
     // Python Runtime
     match &info.python_version {
@@ -36,7 +52,7 @@ pub fn run(global: &GlobalArgs) -> anyhow::Result<()> {
             passes += 1;
         }
         None => {
-            ui::doctor_fail("qwen-tts", "not installed \u{2014} run: pip install qwen-tts");
+            ui::doctor_fail("qwen-tts", "not installed \u{2014} venv may need repair");
             fails += 1;
         }
     }
