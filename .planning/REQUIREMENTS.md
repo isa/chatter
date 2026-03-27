@@ -18,9 +18,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Voice Profiles
 
 - [x] **PROF-01**: User can create a voice profile from a natural language description via `chatter design`
-- [ ] **PROF-02**: User can create a voice profile from a reference MP3 file via `chatter clone`
+- [x] **PROF-02**: User can create a voice profile from a reference MP3 file via `chatter clone`
 - [x] **PROF-03**: Voice profiles are saved to `~/.config/chatter/profiles/` with metadata (TOML) and cached sample audio (MP3)
-- [ ] **PROF-04**: User can list all saved voice profiles via `chatter profiles list`
+- [x] **PROF-04**: User can list all saved voice profiles via `chatter profiles list`
 - [x] **PROF-05**: Profile metadata includes: name, type (designed/cloned), language, description/source, creation date
 - [x] **PROF-06**: Cached sample audio is generated at profile creation time for previewing
 
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOUN-04 | Phase 1 | Complete |
 | FOUN-05 | Phase 1 | Complete |
 | PROF-01 | Phase 2 | Complete |
-| PROF-02 | Phase 2 | Pending |
+| PROF-02 | Phase 2 | Complete |
 | PROF-03 | Phase 2 | Complete |
-| PROF-04 | Phase 2 | Pending |
+| PROF-04 | Phase 2 | Complete |
 | PROF-05 | Phase 2 | Complete |
 | PROF-06 | Phase 2 | Complete |
 | GEN-01 | Phase 2 | Pending |
