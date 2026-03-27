@@ -48,8 +48,8 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md -- Core types, profile storage, audio pipeline, CLI cleanup, Python bridge adapter
-- [ ] 02-02-PLAN.md -- Voice design command with interactive preview loop
-- [ ] 02-03-PLAN.md -- Voice clone command and profiles list/show
+- [x] 02-02-PLAN.md -- Voice design command with interactive preview loop
+- [x] 02-03-PLAN.md -- Voice clone command and profiles list/show
 - [ ] 02-04-PLAN.md -- Speech generation command
 
 ### Phase 3: File Input and Text Processing

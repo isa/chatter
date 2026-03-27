@@ -17,12 +17,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Voice Profiles
 
-- [ ] **PROF-01**: User can create a voice profile from a natural language description via `chatter design`
+- [x] **PROF-01**: User can create a voice profile from a natural language description via `chatter design`
 - [ ] **PROF-02**: User can create a voice profile from a reference MP3 file via `chatter clone`
 - [x] **PROF-03**: Voice profiles are saved to `~/.config/chatter/profiles/` with metadata (TOML) and cached sample audio (MP3)
 - [ ] **PROF-04**: User can list all saved voice profiles via `chatter profiles list`
 - [x] **PROF-05**: Profile metadata includes: name, type (designed/cloned), language, description/source, creation date
-- [ ] **PROF-06**: Cached sample audio is generated at profile creation time for previewing
+- [x] **PROF-06**: Cached sample audio is generated at profile creation time for previewing
 
 ### Speech Generation
 
@@ -37,7 +37,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **UX-01**: Progress bar displays during model loading
 - [ ] **UX-02**: Progress bar displays during speech synthesis
-- [ ] **UX-03**: Progress bar displays during voice profile creation (design and clone)
+- [x] **UX-03**: Progress bar displays during voice profile creation (design and clone)
 - [x] **UX-04**: `--help` provides clear usage information for all commands and flags
 
 ## v2 Requirements
@@ -87,12 +87,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOUN-03 | Phase 1 | Complete |
 | FOUN-04 | Phase 1 | Complete |
 | FOUN-05 | Phase 1 | Complete |
-| PROF-01 | Phase 2 | Pending |
+| PROF-01 | Phase 2 | Complete |
 | PROF-02 | Phase 2 | Pending |
 | PROF-03 | Phase 2 | Complete |
 | PROF-04 | Phase 2 | Pending |
 | PROF-05 | Phase 2 | Complete |
-| PROF-06 | Phase 2 | Pending |
+| PROF-06 | Phase 2 | Complete |
 | GEN-01 | Phase 2 | Pending |
 | GEN-02 | Phase 3 | Pending |
 | GEN-03 | Phase 3 | Pending |
@@ -101,7 +101,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GEN-06 | Phase 2 | Pending |
 | UX-01 | Phase 1 | Complete |
 | UX-02 | Phase 2 | Pending |
-| UX-03 | Phase 2 | Pending |
+| UX-03 | Phase 2 | Complete |
 | UX-04 | Phase 1 | Complete |
 
 **Coverage:**
