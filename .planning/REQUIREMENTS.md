@@ -9,11 +9,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Foundation
 
-- [ ] **FOUN-01**: PyO3 bridge initializes Python runtime and loads qwen-tts models successfully
+- [x] **FOUN-01**: PyO3 bridge initializes Python runtime and loads qwen-tts models successfully
 - [x] **FOUN-02**: CLI binary parses subcommands (design, clone, generate) with appropriate flags
 - [x] **FOUN-03**: Language flag accepts: Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Italian
 - [x] **FOUN-04**: Model size flag accepts 0.6B and 1.7B (default 1.7B)
-- [ ] **FOUN-05**: Helpful error messages when GPU unavailable or Python/qwen-tts not installed
+- [x] **FOUN-05**: Helpful error messages when GPU unavailable or Python/qwen-tts not installed
 
 ### Voice Profiles
 
@@ -35,7 +35,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### User Experience
 
-- [ ] **UX-01**: Progress bar displays during model loading
+- [x] **UX-01**: Progress bar displays during model loading
 - [ ] **UX-02**: Progress bar displays during speech synthesis
 - [ ] **UX-03**: Progress bar displays during voice profile creation (design and clone)
 - [x] **UX-04**: `--help` provides clear usage information for all commands and flags
@@ -82,11 +82,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUN-01 | Phase 1 | Pending |
+| FOUN-01 | Phase 1 | Complete |
 | FOUN-02 | Phase 1 | Complete |
 | FOUN-03 | Phase 1 | Complete |
 | FOUN-04 | Phase 1 | Complete |
-| FOUN-05 | Phase 1 | Pending |
+| FOUN-05 | Phase 1 | Complete |
 | PROF-01 | Phase 2 | Pending |
 | PROF-02 | Phase 2 | Pending |
 | PROF-03 | Phase 2 | Pending |
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GEN-04 | Phase 3 | Pending |
 | GEN-05 | Phase 2 | Pending |
 | GEN-06 | Phase 2 | Pending |
-| UX-01 | Phase 1 | Pending |
+| UX-01 | Phase 1 | Complete |
 | UX-02 | Phase 2 | Pending |
 | UX-03 | Phase 2 | Pending |
 | UX-04 | Phase 1 | Complete |
