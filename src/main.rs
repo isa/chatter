@@ -1,5 +1,7 @@
+mod bridge;
 mod cli;
 mod commands;
+mod ui;
 
 use clap::Parser;
 
