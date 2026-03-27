@@ -65,8 +65,9 @@ fn venv_python_path(venv: &std::path::Path) -> PathBuf {
 fn find_system_python() -> Result<String, BridgeError> {
     // Try common paths in priority order
     let candidates = [
-        "python3.12",
+        "python3.14",
         "python3.13",
+        "python3.12",
         "python3.11",
         "python3",
     ];
