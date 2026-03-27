@@ -7,8 +7,20 @@ use indicatif::ProgressBar;
 
 use super::error::BridgeError;
 
-/// The packages to install in the chatter venv.
-const REQUIRED_PACKAGES: &[&str] = &["qwen-tts"];
+/// The chatter_bridge.py source, embedded at compile time.
+const BRIDGE_MODULE_SOURCE: &str = include_str!("../../chatter_bridge.py");
+
+/// Return the required packages based on the detected compute backend.
+/// MLX backend uses mlx-audio; all others use qwen-tts.
+fn required_packages() -> Vec<&'static str> {
+    // Try to detect if MLX is available by checking platform
+    // On macOS ARM64, prefer mlx-audio; otherwise qwen-tts
+    if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        vec!["mlx-audio"]
+    } else {
+        vec!["qwen-tts"]
+    }
+}
 
 /// Get the path to chatter's managed venv.
 ///
@@ -40,7 +52,7 @@ pub fn venv_site_packages() -> Result<PathBuf, BridgeError> {
     Err(BridgeError::Other("Could not find site-packages in venv".to_string()))
 }
 
-/// Check if the managed venv exists and has qwen-tts installed.
+/// Check if the managed venv exists and has chatter_bridge importable.
 pub fn is_venv_ready() -> bool {
     let Ok(venv) = venv_path() else {
         return false;
@@ -49,12 +61,22 @@ pub fn is_venv_ready() -> bool {
     if !python.exists() {
         return false;
     }
+    // Check that chatter_bridge is importable (it depends on the backend package)
     let output = Command::new(&python)
-        .args(["-c", "import qwen_tts"])
+        .args(["-c", "import chatter_bridge"])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .output();
     matches!(output, Ok(o) if o.status.success())
+}
+
+/// Install the chatter_bridge.py module into the venv's site-packages.
+fn install_bridge_module() -> Result<(), BridgeError> {
+    let site_packages = venv_site_packages()?;
+    let dest = site_packages.join("chatter_bridge.py");
+    std::fs::write(&dest, BRIDGE_MODULE_SOURCE)
+        .map_err(|e| BridgeError::Other(format!("Failed to install chatter_bridge.py: {e}")))?;
+    Ok(())
 }
 
 /// Get the path to the Python binary inside the venv.
@@ -121,12 +143,21 @@ pub fn create_venv(spinner: Option<&ProgressBar>) -> Result<PathBuf, BridgeError
     run_pip_quiet(&venv_pip, &["install", "--upgrade", "pip"], spinner)?;
 
     // Install packages with live status
-    update_spinner(spinner, "Installing qwen-tts (this may take a few minutes)...");
+    let packages = required_packages();
+    let pkg_names = packages.join(", ");
+    update_spinner(
+        spinner,
+        &format!("Installing {pkg_names} (this may take a few minutes)..."),
+    );
     let mut pip_args = vec!["install"];
-    for pkg in REQUIRED_PACKAGES {
+    for pkg in &packages {
         pip_args.push(pkg);
     }
     run_pip_with_progress(&venv_pip, &pip_args, spinner)?;
+
+    // Install the chatter_bridge.py adapter into site-packages
+    update_spinner(spinner, "Installing chatter bridge module...");
+    install_bridge_module()?;
 
     Ok(venv)
 }
