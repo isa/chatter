@@ -1,3 +1,4 @@
+mod bridge;
 mod cli;
 mod commands;
 
