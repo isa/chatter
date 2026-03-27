@@ -10,8 +10,9 @@ A Rust CLI tool that wraps Qwen3-TTS from Hugging Face to provide text-to-speech
 ### Constraints
 
 - **Tech stack**: Rust CLI with PyO3 for Python interop — required because model is Python-only
-- **Hardware**: CUDA-capable GPU required for local inference
-- **Dependencies**: Python 3.12+ runtime with `qwen-tts` package installed
+- **Hardware**: Apple Silicon (MLX/MPS) or CUDA-capable GPU required for local inference
+- **Distribution**: `brew install chatter` must work out of the box. Chatter manages its own Python venv at `~/.local/share/chatter/venv/` with auto-setup on first run. Users do NOT manually install Python packages.
+- **Dependencies**: Python 3.12+ runtime (Homebrew formula declares `depends_on "python@3.12"`). `qwen-tts` is auto-installed into the managed venv on first run.
 - **Audio**: MP3 output (requires encoding from WAV produced by model)
 <!-- GSD:project-end -->
 
