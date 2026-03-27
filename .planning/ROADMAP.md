@@ -27,7 +27,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. User can run `chatter` and it initializes the Python runtime and loads a Qwen3-TTS model with a visible progress bar
   3. User sees a clear, actionable error message when GPU is unavailable or Python/qwen-tts is not installed
   4. User can pass `--language` and `--model-size` flags that are validated against allowed values
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md -- Rust project scaffold and CLI argument parsing
+- [ ] 01-02-PLAN.md -- PyO3 bridge and model management commands
+- [ ] 01-03-PLAN.md -- Doctor command and shared UI helpers
 
 ### Phase 2: Voice Profiles and Speech Generation
 **Goal**: Users can create reusable voice profiles (by description or cloning) and generate speech from inline text using those profiles
@@ -58,6 +63,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Python Bridge | 0/0 | Not started | - |
+| 1. Foundation and Python Bridge | 0/3 | Planning complete | - |
 | 2. Voice Profiles and Speech Generation | 0/0 | Not started | - |
 | 3. File Input and Text Processing | 0/0 | Not started | - |
