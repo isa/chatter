@@ -47,7 +47,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Core types, profile storage, audio pipeline, CLI cleanup, Python bridge adapter
+- [x] 02-01-PLAN.md -- Core types, profile storage, audio pipeline, CLI cleanup, Python bridge adapter
 - [ ] 02-02-PLAN.md -- Voice design command with interactive preview loop
 - [ ] 02-03-PLAN.md -- Voice clone command and profiles list/show
 - [ ] 02-04-PLAN.md -- Speech generation command

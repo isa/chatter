@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-27T15:28:27.065Z"
+status: Ready to execute
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-27T18:24:29.390Z"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-27)
 
 **Core value:** Users can create reusable voice profiles and generate high-quality speech from text or documents without leaving the command line.
-**Current focus:** Phase 01 — foundation-and-python-bridge
+**Current focus:** Phase 02 — voice-profiles-and-speech-generation
 
 ## Current Position
 
-Phase: 01 (foundation-and-python-bridge) — EXECUTING
-Plan: 3 of 3
+Phase: 02 (voice-profiles-and-speech-generation) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Plan: 3 of 3
 | Phase 01 P01 | 5min | 2 tasks | 10 files |
 | Phase 01 P02 | 4min | 2 tasks | 6 files |
 | Phase 01 P03 | 8min | 2 tasks | 7 files |
+| Phase 02 P01 | 6min | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ Recent decisions affecting current work:
 - [Phase 01]: Extracted import_hf_hub helper to centralize Python import error handling
 - [Phase 01]: Used Rust std::fs for HF cache walking instead of Python os.walk (PyO3 0.28 CStr compat)
 - [Phase 01]: Shared UI module (src/ui.rs) with NO_COLOR support via owo-colors if_supports_color
+- [Phase 02]: Removed ModelSize enum -- always 1.7B models
+- [Phase 02]: Backend-aware venv: mlx-audio on macOS ARM64, qwen-tts elsewhere
+- [Phase 02]: Embedded chatter_bridge.py via include_str! written to site-packages at venv creation
 
 ### Pending Todos
 
@@ -76,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T15:28:27.059Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-voice-profiles-and-speech-generation/02-CONTEXT.md
+Last session: 2026-03-27T18:24:29.383Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
