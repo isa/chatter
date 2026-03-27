@@ -10,15 +10,25 @@ A Rust CLI tool that wraps [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) to p
 - **Model Management** — Download, list, and manage Qwen3-TTS model variants (0.6B / 1.7B)
 - **Environment Doctor** — Validate your setup (Python, GPU, dependencies) with `chatter doctor`
 
-## Requirements
-
-- **Rust** 1.85+ (edition 2024)
-- **Python** 3.12+ with [`qwen-tts`](https://pypi.org/project/qwen-tts/) installed
-- **GPU** — Apple Silicon (MLX/MPS) or CUDA-capable GPU
+## Installation
 
 ```sh
-# Install the Python dependency
-pip install -U qwen-tts
+brew install chatter
+```
+
+Chatter manages its own Python environment automatically. On first run, it creates a virtual environment and installs all Python dependencies — no manual setup needed.
+
+### Requirements
+
+- **Python** 3.12+ (installed automatically by Homebrew as a dependency)
+- **GPU** — Apple Silicon (MLX/MPS) or CUDA-capable GPU
+
+### Building from source
+
+```sh
+# Ensure Python 3.12 is available for PyO3
+export PYO3_PYTHON=python3.12
+cargo build --release
 ```
 
 ## Usage
@@ -56,15 +66,6 @@ Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, R
 | Qwen3-TTS 1.7B Base | ~3.4 GB | Voice cloning |
 | Qwen3-TTS 0.6B CustomVoice | ~1.2 GB | Lighter named voice TTS |
 | Qwen3-TTS 0.6B Base | ~1.2 GB | Lighter voice cloning |
-
-## Building
-
-```sh
-# Ensure Python 3.12 is available for PyO3
-export PYO3_PYTHON=python3.12
-
-cargo build --release
-```
 
 ## License
 
