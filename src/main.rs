@@ -1,6 +1,8 @@
+mod audio;
 mod bridge;
 mod cli;
 mod commands;
+mod profile;
 mod ui;
 
 use clap::Parser;

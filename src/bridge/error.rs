@@ -21,4 +21,22 @@ pub enum BridgeError {
 
     #[error("{0}")]
     Other(String),
+
+    #[error("Voice design failed: {0}")]
+    VoiceDesignFailed(String),
+
+    #[error("Voice clone failed: {0}")]
+    VoiceCloneFailed(String),
+
+    #[error("Speech generation failed: {0}")]
+    GenerationFailed(String),
+
+    #[error("Audio encoding failed: {0}")]
+    AudioEncodingFailed(String),
+
+    #[error("Profile error: {0}")]
+    ProfileError(String),
+
+    #[error("Inference backend not available: {0}")]
+    BackendNotAvailable(String),
 }
