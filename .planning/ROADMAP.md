@@ -60,7 +60,11 @@ Plans:
   1. User can run `chatter generate --file document.txt --profile myvoice` and get spoken audio output
   2. User can run `chatter generate --file notes.md --profile myvoice` and Markdown formatting is stripped before synthesis
   3. User can run `chatter generate --file paper.pdf --profile myvoice` and text is extracted and synthesized
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md -- Text extraction module (TXT, Markdown, PDF) and paragraph chunker
+- [ ] 03-02-PLAN.md -- Wire file input into generate command with multi-chunk synthesis and split output
 
 ## Progress
 
@@ -71,4 +75,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Foundation and Python Bridge | 3/3 | Complete |  |
 | 2. Voice Profiles and Speech Generation | 0/4 | Not started | - |
-| 3. File Input and Text Processing | 0/0 | Not started | - |
+| 3. File Input and Text Processing | 0/2 | Not started | - |
