@@ -16,6 +16,9 @@ pub enum BridgeError {
     #[error("Python venv not found. Set CHATTER_VENV=/path/to/venv or reinstall: brew reinstall chatter")]
     VenvNotFound,
 
+    #[error("CHATTER_VENV={0} does not contain a valid Python venv (missing bin/python)")]
+    InvalidVenv(String),
+
     #[error("No GPU available. Chatter requires Apple Silicon (MLX/MPS) or a CUDA GPU")]
     NoGpuAvailable,
 

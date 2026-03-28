@@ -10,6 +10,8 @@ pub enum VenvDiagnosis {
     Ready,
     /// No venv path could be resolved.
     NotFound,
+    /// `CHATTER_VENV` is set but points to an invalid path.
+    InvalidEnvVar { value: String },
     /// Venv directory exists but `bin/python` is missing.
     NoPython { venv_path: PathBuf },
     /// Python exists but `import chatter_bridge` fails.
@@ -34,18 +36,23 @@ pub fn venv_path() -> Result<PathBuf, BridgeError> {
         if p.join("bin").join("python").exists() {
             return Ok(p);
         }
-        return Err(BridgeError::Other(format!(
-            "CHATTER_VENV={path} does not contain a valid Python venv"
-        )));
+        return Err(BridgeError::InvalidVenv(path));
     }
 
     // 2. Binary-relative (Homebrew: bin/chatter → ../libexec/venv/)
-    if let Ok(exe) = std::env::current_exe() {
+    //    Try canonicalized path first (resolves Homebrew symlinks), then raw path.
+    for exe in [
+        std::env::current_exe().and_then(|p| p.canonicalize()),
+        std::env::current_exe(),
+    ]
+    .into_iter()
+    .flatten()
+    {
         if let Some(bin_dir) = exe.parent() {
-            let brew_venv = bin_dir.parent().map(|p| p.join("libexec").join("venv"));
-            if let Some(ref venv) = brew_venv {
+            if let Some(prefix) = bin_dir.parent() {
+                let venv = prefix.join("libexec").join("venv");
                 if venv.join("bin").join("python").exists() {
-                    return Ok(venv.clone());
+                    return Ok(venv);
                 }
             }
         }
@@ -114,8 +121,12 @@ pub fn is_venv_ready() -> bool {
 /// Returns a structured diagnosis that allows the doctor command to show
 /// specific, actionable error messages instead of a generic "not found".
 pub fn diagnose_venv() -> VenvDiagnosis {
-    let Ok(venv) = venv_path() else {
-        return VenvDiagnosis::NotFound;
+    let venv = match venv_path() {
+        Ok(v) => v,
+        Err(BridgeError::InvalidVenv(value)) => {
+            return VenvDiagnosis::InvalidEnvVar { value };
+        }
+        Err(_) => return VenvDiagnosis::NotFound,
     };
     let python = venv_python_path(&venv);
     if !python.exists() {

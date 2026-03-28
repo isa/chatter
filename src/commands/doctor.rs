@@ -35,6 +35,15 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             );
             fails += 1;
         }
+        bridge::VenvDiagnosis::InvalidEnvVar { value } => {
+            ui::doctor_fail(
+                "Venv",
+                &format!(
+                    "CHATTER_VENV={value} is invalid (missing bin/python) — unset it or fix the path"
+                ),
+            );
+            fails += 1;
+        }
         bridge::VenvDiagnosis::NoPython { venv_path } => {
             ui::doctor_fail(
                 "Venv",
