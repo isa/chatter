@@ -238,7 +238,11 @@ def voice_clone_from_audio(ref_audio_path, text, language):
     """
     import numpy as np
     backend = detect_backend()
-    model = load_custom_voice_model()
+    # MLX voice cloning uses Base model with ref_audio (ICL), not CustomVoice
+    if backend == "mlx":
+        model = load_base_model()
+    else:
+        model = load_custom_voice_model()
     with _suppress_output():
         if backend == "mlx":
             results = list(model.generate(
