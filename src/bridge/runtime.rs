@@ -108,7 +108,12 @@ fn try_detect_mlx(py: Python<'_>) -> Result<Option<ComputeBackend>, BridgeError>
         return Ok(None);
     }
 
-    let device_info = metal.call_method0("device_info")?;
+    // Try mx.device_info() first (new API), fall back to mx.metal.device_info() (deprecated)
+    let device_info = if let Ok(info) = mx.call_method0("device_info") {
+        info
+    } else {
+        metal.call_method0("device_info")?
+    };
     let memory_bytes: u64 = device_info.get_item("memory_size")?.extract()?;
 
     Ok(Some(ComputeBackend::Mlx { memory_bytes }))
