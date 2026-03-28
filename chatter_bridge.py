@@ -6,9 +6,33 @@ and ensure data is on CPU before returning to Rust.
 """
 import sys
 import os
+import contextlib
+import warnings
 
 _backend_cache = None
 _models = {}
+
+
+@contextlib.contextmanager
+def _suppress_output():
+    """Suppress stdout/stderr from noisy Python libraries (tqdm, flash-attn, sox warnings).
+
+    Captures all output to devnull so it doesn't fight with Rust's indicatif spinner.
+    Warnings (like flash-attn) are also suppressed.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        try:
+            sys.stdout = open(os.devnull, "w")
+            sys.stderr = open(os.devnull, "w")
+            yield
+        finally:
+            sys.stdout.close()
+            sys.stderr.close()
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
 
 
 def detect_backend():
@@ -39,18 +63,19 @@ def load_design_model():
     if "design" in _models:
         return _models["design"]
     backend = detect_backend()
-    if backend == "mlx":
-        from mlx_audio.tts.utils import load_model
-        model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16")
-    else:
-        from qwen_tts import Qwen3TTSModel
-        import torch
-        device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
-        dtype = torch.bfloat16 if backend == "cuda" else torch.float32
-        model = Qwen3TTSModel.from_pretrained(
-            "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
-            device_map=device, dtype=dtype,
-        )
+    with _suppress_output():
+        if backend == "mlx":
+            from mlx_audio.tts.utils import load_model
+            model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16")
+        else:
+            from qwen_tts import Qwen3TTSModel
+            import torch
+            device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
+            dtype = torch.bfloat16 if backend == "cuda" else torch.float32
+            model = Qwen3TTSModel.from_pretrained(
+                "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+                device_map=device, dtype=dtype,
+            )
     _models["design"] = model
     return model
 
@@ -60,18 +85,19 @@ def load_base_model():
     if "base" in _models:
         return _models["base"]
     backend = detect_backend()
-    if backend == "mlx":
-        from mlx_audio.tts.utils import load_model
-        model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16")
-    else:
-        from qwen_tts import Qwen3TTSModel
-        import torch
-        device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
-        dtype = torch.bfloat16 if backend == "cuda" else torch.float32
-        model = Qwen3TTSModel.from_pretrained(
-            "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-            device_map=device, dtype=dtype,
-        )
+    with _suppress_output():
+        if backend == "mlx":
+            from mlx_audio.tts.utils import load_model
+            model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16")
+        else:
+            from qwen_tts import Qwen3TTSModel
+            import torch
+            device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
+            dtype = torch.bfloat16 if backend == "cuda" else torch.float32
+            model = Qwen3TTSModel.from_pretrained(
+                "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+                device_map=device, dtype=dtype,
+            )
     _models["base"] = model
     return model
 
@@ -81,18 +107,19 @@ def load_custom_voice_model():
     if "custom" in _models:
         return _models["custom"]
     backend = detect_backend()
-    if backend == "mlx":
-        from mlx_audio.tts.utils import load_model
-        model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16")
-    else:
-        from qwen_tts import Qwen3TTSModel
-        import torch
-        device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
-        dtype = torch.bfloat16 if backend == "cuda" else torch.float32
-        model = Qwen3TTSModel.from_pretrained(
-            "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-            device_map=device, dtype=dtype,
-        )
+    with _suppress_output():
+        if backend == "mlx":
+            from mlx_audio.tts.utils import load_model
+            model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16")
+        else:
+            from qwen_tts import Qwen3TTSModel
+            import torch
+            device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
+            dtype = torch.bfloat16 if backend == "cuda" else torch.float32
+            model = Qwen3TTSModel.from_pretrained(
+                "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+                device_map=device, dtype=dtype,
+            )
     _models["custom"] = model
     return model
 
@@ -102,18 +129,19 @@ def voice_design(text, language, instruct):
     import numpy as np
     model = load_design_model()
     backend = detect_backend()
-    if backend == "mlx":
-        results = list(model.generate_voice_design(
-            text=text, language=language, instruct=instruct
-        ))
-        audio = np.array(results[0].audio, dtype=np.float32)
-        return audio.tolist(), 24000
-    else:
-        wavs, sr = model.generate_voice_design(
-            text=text, language=language, instruct=instruct
-        )
-        audio = wavs[0].cpu().numpy().astype(np.float32)
-        return audio.tolist(), int(sr)
+    with _suppress_output():
+        if backend == "mlx":
+            results = list(model.generate_voice_design(
+                text=text, language=language, instruct=instruct
+            ))
+            audio = np.array(results[0].audio, dtype=np.float32)
+            return audio.tolist(), 24000
+        else:
+            wavs, sr = model.generate_voice_design(
+                text=text, language=language, instruct=instruct
+            )
+            audio = wavs[0].cpu().numpy().astype(np.float32)
+            return audio.tolist(), int(sr)
 
 
 def create_clone_prompt(ref_audio_path, ref_text):
@@ -124,12 +152,13 @@ def create_clone_prompt(ref_audio_path, ref_text):
     backend = detect_backend()
     if backend == "mlx":
         return None  # MLX doesn't have clone prompts; uses ref_audio directly
-    import soundfile as sf
     model = load_base_model()
-    wav, sr = sf.read(ref_audio_path)
-    prompt = model.create_voice_clone_prompt(
-        ref_audio=(wav, sr), ref_text=ref_text
-    )
+    with _suppress_output():
+        import soundfile as sf
+        wav, sr = sf.read(ref_audio_path)
+        prompt = model.create_voice_clone_prompt(
+            ref_audio=(wav, sr), ref_text=ref_text
+        )
     return prompt
 
 
@@ -154,25 +183,25 @@ def generate_speech(text, language, profile_dir):
     """
     import numpy as np
     backend = detect_backend()
-    if backend == "mlx":
-        model = load_custom_voice_model()
-        ref_audio_path = os.path.join(profile_dir, "ref_audio.wav")
-        results = list(model.generate(
-            text=text, language=language, ref_audio=ref_audio_path
-        ))
-        audio = np.array(results[0].audio, dtype=np.float32)
-        return audio.tolist(), 24000
-    else:
-        import torch
-        model = load_custom_voice_model()
-        prompt_path = os.path.join(profile_dir, "voice_prompt.bin")
-        device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
-        prompt = torch.load(prompt_path, map_location=device)
-        wavs, sr = model.generate_voice_clone(
-            text=text, language=language, voice_clone_prompt=prompt
-        )
-        audio = wavs[0].cpu().numpy().astype(np.float32)
-        return audio.tolist(), int(sr)
+    model = load_custom_voice_model()
+    with _suppress_output():
+        if backend == "mlx":
+            ref_audio_path = os.path.join(profile_dir, "ref_audio.wav")
+            results = list(model.generate(
+                text=text, language=language, ref_audio=ref_audio_path
+            ))
+            audio = np.array(results[0].audio, dtype=np.float32)
+            return audio.tolist(), 24000
+        else:
+            import torch
+            prompt_path = os.path.join(profile_dir, "voice_prompt.bin")
+            device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
+            prompt = torch.load(prompt_path, map_location=device)
+            wavs, sr = model.generate_voice_clone(
+                text=text, language=language, voice_clone_prompt=prompt
+            )
+            audio = wavs[0].cpu().numpy().astype(np.float32)
+            return audio.tolist(), int(sr)
 
 
 def voice_clone_from_audio(ref_audio_path, text, language):
@@ -182,25 +211,25 @@ def voice_clone_from_audio(ref_audio_path, text, language):
     """
     import numpy as np
     backend = detect_backend()
-    if backend == "mlx":
-        model = load_custom_voice_model()
-        results = list(model.generate(
-            text=text, language=language, ref_audio=ref_audio_path
-        ))
-        audio = np.array(results[0].audio, dtype=np.float32)
-        return audio.tolist(), 24000
-    else:
-        import soundfile as sf
-        model = load_custom_voice_model()
-        wav_data, sr_data = sf.read(ref_audio_path)
-        prompt = model.create_voice_clone_prompt(
-            ref_audio=(wav_data, sr_data), ref_text=text
-        )
-        wavs, sr = model.generate_voice_clone(
-            text=text, language=language, voice_clone_prompt=prompt
-        )
-        audio = wavs[0].cpu().numpy().astype(np.float32)
-        return audio.tolist(), int(sr)
+    model = load_custom_voice_model()
+    with _suppress_output():
+        if backend == "mlx":
+            results = list(model.generate(
+                text=text, language=language, ref_audio=ref_audio_path
+            ))
+            audio = np.array(results[0].audio, dtype=np.float32)
+            return audio.tolist(), 24000
+        else:
+            import soundfile as sf
+            wav_data, sr_data = sf.read(ref_audio_path)
+            prompt = model.create_voice_clone_prompt(
+                ref_audio=(wav_data, sr_data), ref_text=text
+            )
+            wavs, sr = model.generate_voice_clone(
+                text=text, language=language, voice_clone_prompt=prompt
+            )
+            audio = wavs[0].cpu().numpy().astype(np.float32)
+            return audio.tolist(), int(sr)
 
 
 def unload_all_models():

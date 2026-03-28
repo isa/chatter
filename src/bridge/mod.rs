@@ -13,4 +13,4 @@ pub use inference::{
 };
 pub use model::{download_model, list_cached_models, ModelInfo};
 pub use runtime::{detect_backend, ComputeBackend};
-pub use venv::{configure_python_for_venv, create_venv, is_venv_ready, venv_path};
+pub use venv::{configure_python_for_venv, ensure_bridge_installed, is_venv_ready, venv_path};

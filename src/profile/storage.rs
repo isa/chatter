@@ -1,17 +1,20 @@
 use std::path::PathBuf;
 
-use directories::ProjectDirs;
-
 use super::ProfileMetadata;
 
 /// Preview sentence for voice profile samples.
 pub const PREVIEW_SENTENCE: &str = "Hello, this is a preview of your voice profile.";
 
+/// Get the chatter home directory (~/.config/chatter/).
+pub fn chatter_home() -> anyhow::Result<PathBuf> {
+    let home = std::env::var("HOME")
+        .map_err(|_| anyhow::anyhow!("HOME environment variable not set"))?;
+    Ok(PathBuf::from(home).join(".config").join("chatter"))
+}
+
 /// Get the profiles directory (~/.config/chatter/profiles/)
 pub fn profiles_dir() -> anyhow::Result<PathBuf> {
-    let dirs = ProjectDirs::from("", "", "chatter")
-        .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
-    Ok(dirs.config_dir().join("profiles"))
+    Ok(chatter_home()?.join("profiles"))
 }
 
 /// Save profile metadata to TOML and return the profile directory path.

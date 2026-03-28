@@ -1,35 +1,44 @@
-use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-
-use directories::ProjectDirs;
-use indicatif::ProgressBar;
 
 use super::error::BridgeError;
 
 /// The chatter_bridge.py source, embedded at compile time.
 const BRIDGE_MODULE_SOURCE: &str = include_str!("../../chatter_bridge.py");
 
-/// Return the required packages based on the detected compute backend.
-/// MLX backend uses mlx-audio; all others use qwen-tts.
-fn required_packages() -> Vec<&'static str> {
-    // Try to detect if MLX is available by checking platform
-    // On macOS ARM64, prefer mlx-audio; otherwise qwen-tts
-    if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
-        vec!["mlx-audio"]
-    } else {
-        vec!["qwen-tts"]
-    }
-}
-
-/// Get the path to chatter's managed venv.
+/// Discover the venv path. Resolution order:
 ///
-/// Location: `~/.local/share/chatter/venv/` (Linux)
-///           `~/Library/Application Support/chatter/venv/` (macOS)
+/// 1. `CHATTER_VENV` env var (explicit override for dev/testing)
+/// 2. Binary-relative `../libexec/venv/` (Homebrew Cellar layout)
+/// 3. Error — venv must be provided by the installation method
+///
+/// Chatter never creates a venv at runtime. `brew install chatter`
+/// sets up the venv in the Cellar during formula installation.
 pub fn venv_path() -> Result<PathBuf, BridgeError> {
-    let dirs = ProjectDirs::from("", "", "chatter")
-        .ok_or_else(|| BridgeError::Other("Could not determine data directory".to_string()))?;
-    Ok(dirs.data_dir().join("venv"))
+    // 1. Explicit override
+    if let Ok(path) = std::env::var("CHATTER_VENV") {
+        let p = PathBuf::from(&path);
+        if p.join("bin").join("python").exists() {
+            return Ok(p);
+        }
+        return Err(BridgeError::Other(format!(
+            "CHATTER_VENV={path} does not contain a valid Python venv"
+        )));
+    }
+
+    // 2. Binary-relative (Homebrew: bin/chatter → ../libexec/venv/)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(bin_dir) = exe.parent() {
+            let brew_venv = bin_dir.parent().map(|p| p.join("libexec").join("venv"));
+            if let Some(ref venv) = brew_venv {
+                if venv.join("bin").join("python").exists() {
+                    return Ok(venv.clone());
+                }
+            }
+        }
+    }
+
+    Err(BridgeError::VenvNotFound)
 }
 
 /// Get the site-packages path inside the venv.
@@ -52,7 +61,7 @@ pub fn venv_site_packages() -> Result<PathBuf, BridgeError> {
     Err(BridgeError::Other("Could not find site-packages in venv".to_string()))
 }
 
-/// Check if the managed venv exists and has chatter_bridge importable.
+/// Check if the venv is found and has chatter_bridge importable.
 pub fn is_venv_ready() -> bool {
     let Ok(venv) = venv_path() else {
         return false;
@@ -61,7 +70,6 @@ pub fn is_venv_ready() -> bool {
     if !python.exists() {
         return false;
     }
-    // Check that chatter_bridge is importable (it depends on the backend package)
     let output = Command::new(&python)
         .args(["-c", "import chatter_bridge"])
         .stdout(Stdio::null())
@@ -70,12 +78,22 @@ pub fn is_venv_ready() -> bool {
     matches!(output, Ok(o) if o.status.success())
 }
 
-/// Install the chatter_bridge.py module into the venv's site-packages.
-fn install_bridge_module() -> Result<(), BridgeError> {
+/// Ensure the chatter_bridge.py module is installed and up-to-date in the venv.
+///
+/// Compares the embedded source against the installed copy. Writes (or overwrites)
+/// if missing or stale. This handles upgrades across chatter versions.
+pub fn ensure_bridge_installed() -> Result<(), BridgeError> {
     let site_packages = venv_site_packages()?;
     let dest = site_packages.join("chatter_bridge.py");
-    std::fs::write(&dest, BRIDGE_MODULE_SOURCE)
-        .map_err(|e| BridgeError::Other(format!("Failed to install chatter_bridge.py: {e}")))?;
+    let needs_write = if dest.exists() {
+        std::fs::read_to_string(&dest).map_or(true, |existing| existing != BRIDGE_MODULE_SOURCE)
+    } else {
+        true
+    };
+    if needs_write {
+        std::fs::write(&dest, BRIDGE_MODULE_SOURCE)
+            .map_err(|e| BridgeError::Other(format!("Failed to install chatter_bridge.py: {e}")))?;
+    }
     Ok(())
 }
 
@@ -84,215 +102,40 @@ fn venv_python_path(venv: &std::path::Path) -> PathBuf {
     venv.join("bin").join("python")
 }
 
-/// Find the system Python 3 binary (from Homebrew or system).
-fn find_system_python() -> Result<String, BridgeError> {
-    let candidates = [
-        "python3.14",
-        "python3.13",
-        "python3.12",
-        "python3.11",
-        "python3",
-    ];
-
-    for candidate in &candidates {
-        let output = Command::new(candidate)
-            .args(["--version"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .output();
-        if let Ok(o) = output {
-            if o.status.success() {
-                return Ok(candidate.to_string());
-            }
-        }
-    }
-
-    Err(BridgeError::PythonNotFound)
-}
-
-/// Create the managed venv and install required packages.
+/// Configure the Python runtime to use the venv's packages.
 ///
-/// Takes an optional spinner to update with live status from pip.
-/// All subprocess output is captured — nothing leaks to the terminal.
-pub fn create_venv(spinner: Option<&ProgressBar>) -> Result<PathBuf, BridgeError> {
-    let venv = venv_path()?;
-    let python = find_system_python()?;
-
-    // Create parent directories
-    if let Some(parent) = venv.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| BridgeError::Other(format!("Failed to create data directory: {e}")))?;
-    }
-
-    // Create venv (quiet — no useful output to show)
-    update_spinner(spinner, "Creating Python virtual environment...");
-    let output = Command::new(&python)
-        .args(["-m", "venv", &venv.to_string_lossy()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .map_err(|e| BridgeError::Other(format!("Failed to create venv: {e}")))?;
-
-    if !output.status.success() {
-        return Err(BridgeError::Other("Python venv creation failed".to_string()));
-    }
-
-    // Upgrade pip (quiet)
-    let venv_pip = venv.join("bin").join("pip");
-    update_spinner(spinner, "Upgrading pip...");
-    run_pip_quiet(&venv_pip, &["install", "--upgrade", "pip"], spinner)?;
-
-    // Install packages with live status
-    let packages = required_packages();
-    let pkg_names = packages.join(", ");
-    update_spinner(
-        spinner,
-        &format!("Installing {pkg_names} (this may take a few minutes)..."),
-    );
-    let mut pip_args = vec!["install"];
-    for pkg in &packages {
-        pip_args.push(pkg);
-    }
-    run_pip_with_progress(&venv_pip, &pip_args, spinner)?;
-
-    // Install the chatter_bridge.py adapter into site-packages
-    update_spinner(spinner, "Installing chatter bridge module...");
-    install_bridge_module()?;
-
-    Ok(venv)
-}
-
-/// Run pip silently, only reporting failure.
-fn run_pip_quiet(pip: &std::path::Path, args: &[&str], spinner: Option<&ProgressBar>) -> Result<(), BridgeError> {
-    let output = Command::new(pip)
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| BridgeError::Other(format!("Failed to run pip: {e}")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let _ = spinner; // spinner is managed by caller
-        return Err(BridgeError::Other(format!("pip failed: {stderr}")));
-    }
-    Ok(())
-}
-
-/// Run pip and stream stderr to extract "Collecting/Downloading/Installing" lines
-/// for the spinner status. All output is captured — nothing goes to the terminal.
-fn run_pip_with_progress(pip: &std::path::Path, args: &[&str], spinner: Option<&ProgressBar>) -> Result<(), BridgeError> {
-    let mut child = Command::new(pip)
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| BridgeError::Other(format!("Failed to run pip: {e}")))?;
-
-    // Read stderr in a thread to avoid blocking
-    let stderr = child.stderr.take();
-    let stdout = child.stdout.take();
-
-    let spinner_clone = spinner.cloned();
-    let stderr_thread = std::thread::spawn(move || {
-        let Some(stderr) = stderr else { return String::new() };
-        let reader = BufReader::new(stderr);
-        let mut full_output = String::new();
-        for line in reader.lines() {
-            let Ok(line) = line else { continue };
-            full_output.push_str(&line);
-            full_output.push('\n');
-
-            // Extract useful status from pip output
-            if let Some(status) = extract_pip_status(&line) {
-                if let Some(ref sp) = spinner_clone {
-                    sp.set_message(status);
-                }
-            }
-        }
-        full_output
-    });
-
-    // Drain stdout silently
-    let stdout_thread = std::thread::spawn(move || {
-        let Some(stdout) = stdout else { return };
-        let reader = BufReader::new(stdout);
-        for _ in reader.lines() {}
-    });
-
-    let status = child.wait()
-        .map_err(|e| BridgeError::Other(format!("pip process error: {e}")))?;
-
-    let stderr_output = stderr_thread.join().unwrap_or_default();
-    let _ = stdout_thread.join();
-
-    if !status.success() {
-        // Show last few lines of stderr for debugging
-        let last_lines: String = stderr_output
-            .lines()
-            .rev()
-            .take(5)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(BridgeError::Other(format!(
-            "Package installation failed:\n{last_lines}\n\nCheck your internet connection and try again."
-        )));
-    }
-    Ok(())
-}
-
-/// Extract a short status message from a pip output line.
-fn extract_pip_status(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-
-    if trimmed.starts_with("Collecting ") {
-        // "Collecting torch>=2.0.0 (from qwen-tts)" → "Installing torch..."
-        let pkg = trimmed
-            .strip_prefix("Collecting ")?
-            .split([' ', '>', '<', '=', '!', ';', '('])
-            .next()?;
-        Some(format!("Installing {pkg}..."))
-    } else if trimmed.starts_with("Downloading ") {
-        // "Downloading torch-2.6.0-cp314-..." → "Downloading torch..."
-        let file = trimmed
-            .strip_prefix("Downloading ")?
-            .split(['/', ' '])
-            .last()?;
-        // Extract package name from filename (before first -)
-        let pkg = file.split('-').next().unwrap_or(file);
-        // Check for size info in parentheses
-        if let Some(size_start) = trimmed.rfind('(') {
-            let size_info = &trimmed[size_start..];
-            Some(format!("Downloading {pkg} {size_info}"))
-        } else {
-            Some(format!("Downloading {pkg}..."))
-        }
-    } else if trimmed.starts_with("Installing collected") {
-        Some("Installing collected packages...".to_string())
-    } else if trimmed.starts_with("Successfully installed") {
-        let count = trimmed.split_whitespace().count() - 2; // "Successfully installed" + packages
-        Some(format!("Successfully installed {count} packages"))
-    } else {
-        None
-    }
-}
-
-fn update_spinner(spinner: Option<&ProgressBar>, msg: &str) {
-    if let Some(sp) = spinner {
-        sp.set_message(msg.to_string());
-    }
-}
-
-/// Configure the Python runtime to use the managed venv's packages.
-///
-/// Must be called BEFORE `Python::attach()` or any PyO3 operations.
+/// Must be called BEFORE any PyO3 operations. Sets up:
+/// - PYTHONPATH → venv site-packages
+/// - sys.argv → neutralized (prevents libraries from parsing Rust CLI args)
+/// - sys.executable → venv Python (prevents `-c` errors in subprocess spawning)
+/// - Various env vars to suppress noisy Python library output
 pub fn configure_python_for_venv() -> Result<(), BridgeError> {
     let site_packages = venv_site_packages()?;
     // SAFETY: Called early in main(), before any threads are spawned
     // and before Python is initialized. No concurrent env access.
     unsafe { std::env::set_var("PYTHONPATH", &site_packages) };
+    // Suppress torchaudio's noisy SoX backend probe
+    unsafe { std::env::set_var("TORCHAUDIO_BACKEND", "soundfile") };
+    // Suppress HuggingFace Hub tqdm progress bars (fight with indicatif spinner)
+    unsafe { std::env::set_var("HF_HUB_DISABLE_PROGRESS_BARS", "1") };
+    // Suppress tokenizers parallelism warning
+    unsafe { std::env::set_var("TOKENIZERS_PARALLELISM", "false") };
+    // Suppress Python warnings in child processes (multiprocessing resource_tracker)
+    unsafe { std::env::set_var("PYTHONWARNINGS", "ignore") };
+
+    let venv = venv_path()?;
+    let python_path = venv_python_path(&venv);
+    let python_path_str = python_path.to_string_lossy().to_string();
+
+    pyo3::Python::attach(|py| {
+        use pyo3::prelude::PyAnyMethods;
+        let sys = py.import("sys").expect("sys module");
+        let argv_list = pyo3::types::PyList::new(py, &["chatter"]).expect("list creation");
+        sys.as_any().setattr("argv", argv_list).expect("set sys.argv");
+        sys.as_any()
+            .setattr("executable", python_path_str.as_str())
+            .expect("set sys.executable");
+    });
+
     Ok(())
 }

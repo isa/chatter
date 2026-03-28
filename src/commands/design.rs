@@ -1,7 +1,7 @@
 use std::fs;
-use std::io::{self, BufRead, Write};
 
 use anyhow::Context;
+use dialoguer::{Input, Select};
 
 use crate::audio;
 use crate::bridge::inference;
@@ -28,32 +28,26 @@ fn language_to_str(lang: &Language) -> &'static str {
 }
 
 pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
-    // 1. Resolve profile name
-    let name = match &args.name {
-        Some(n) => n.clone(),
-        None => {
-            let slug = storage::slugify(&args.description, 4);
-            storage::unique_profile_name(&slug)?
-        }
-    };
-
-    // 2. Resolve language string for Python bridge
     let language_str = language_to_str(&global.language);
-
-    // 3. Create profile directory early (needed for temp files)
-    let profile_dir = storage::profile_dir(&name)?;
-    fs::create_dir_all(&profile_dir)
-        .with_context(|| format!("Failed to create profile directory: {}", profile_dir.display()))?;
-
     let mut description = args.description.clone();
+    let mut attempt = 0u32;
+
+    // Use system temp dir for previews during the design loop
+    let temp_dir = std::env::temp_dir().join("chatter-preview");
+    fs::create_dir_all(&temp_dir)?;
+
     // Interactive design loop
     let (wav, sr) = loop {
-        // Show spinner during inference
-        let spinner = ui::create_spinner("Loading VoiceDesign model and designing voice...");
+        attempt += 1;
+
+        let spinner = if attempt == 1 {
+            ui::create_spinner("Loading VoiceDesign model and designing voice...")
+        } else {
+            ui::create_spinner(&format!("Designing voice (attempt {attempt})..."))
+        };
 
         let result = inference::voice_design(PREVIEW_SENTENCE, language_str, &description);
 
-        // Finish spinner before handling result
         let (wav, sr) = match result {
             Ok(data) => {
                 spinner.finish_and_clear();
@@ -61,50 +55,87 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             }
             Err(e) => {
                 spinner.finish_and_clear();
-                // Clean up profile dir if we created it
-                let _ = fs::remove_dir_all(&profile_dir);
+                let _ = fs::remove_dir_all(&temp_dir);
                 return Err(anyhow::anyhow!(e).context("Voice design inference failed"));
             }
         };
 
         // Encode preview to temp MP3
-        let temp_mp3 = profile_dir.join("preview_tmp.mp3");
+        let temp_mp3 = temp_dir.join("preview.mp3");
         let pcm = audio::samples_f32_to_i16(&wav);
         audio::encode_wav_to_mp3(&pcm, sr, &temp_mp3)
             .context("Failed to encode preview audio")?;
 
-        eprintln!("Preview of your custom voice:");
-
-        // Play preview audio
+        eprintln!("\n  Playing preview...\n");
         audio::playback::play_audio(&temp_mp3)
             .context("Failed to play preview audio")?;
-
-        // Clean up temp preview
         let _ = fs::remove_file(&temp_mp3);
 
-        // Interactive accept/retry prompt
-        eprint!("Accept this voice? [Y/n/new description] ");
-        io::stderr().flush()?;
+        // Interactive menu
+        let choices = &[
+            "Yes, accept this voice",
+            "No, retry with same description",
+            "Change the description",
+            "Quit",
+        ];
 
-        let mut input = String::new();
-        let stdin = io::stdin();
-        stdin.lock().read_line(&mut input)?;
+        let selection = Select::new()
+            .with_prompt("What do you think?")
+            .items(choices)
+            .default(0)
+            .interact()?;
 
-        match input.trim() {
-            "" | "y" | "Y" | "yes" => {
-                break (wav, sr);
+        match selection {
+            0 => break (wav, sr),
+            1 => { /* retry with same description */ }
+            2 => {
+                let new_desc: String = Input::new()
+                    .with_prompt("New voice description")
+                    .with_initial_text(&description)
+                    .interact_text()?;
+                if !new_desc.trim().is_empty() {
+                    description = new_desc.trim().to_string();
+                }
             }
-            "n" | "N" | "no" => {
-                // Clean up profile dir
-                let _ = fs::remove_dir_all(&profile_dir);
+            3 => {
+                let _ = fs::remove_dir_all(&temp_dir);
                 anyhow::bail!("Voice design cancelled by user");
             }
-            new_desc => {
-                description = new_desc.to_string();
-                // Loop back with new description (model stays cached in Python)
-            }
+            _ => unreachable!(),
         }
     };
+
+    // Clean up temp dir
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    // Prompt for profile name (use --name if provided, otherwise ask interactively)
+    let default_name = match &args.name {
+        Some(n) => n.clone(),
+        None => {
+            let slug = storage::slugify(&description, 4);
+            storage::unique_profile_name(&slug)?
+        }
+    };
+
+    let name: String = if args.name.is_some() {
+        default_name
+    } else {
+        Input::new()
+            .with_prompt("Profile name")
+            .default(default_name)
+            .interact_text()?
+            .trim()
+            .to_string()
+    };
+
+    if name.is_empty() {
+        anyhow::bail!("Profile name cannot be empty");
+    }
+
+    // Create profile directory
+    let profile_dir = storage::profile_dir(&name)?;
+    fs::create_dir_all(&profile_dir)
+        .with_context(|| format!("Failed to create profile directory: {}", profile_dir.display()))?;
 
     // Save WAV to profile dir (needed for clone prompt creation)
     let ref_wav_path = profile_dir.join("ref_audio.wav");
@@ -126,6 +157,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     }
 
     // Create reusable clone prompt (saves voice_prompt.bin or keeps ref_audio.wav for MLX)
+    let spinner = ui::create_spinner("Saving voice profile...");
     inference::create_and_save_clone_prompt(&ref_wav_path, PREVIEW_SENTENCE, &profile_dir)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to create clone prompt"))?;
 
@@ -134,6 +166,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let pcm = audio::samples_f32_to_i16(&wav);
     audio::encode_wav_to_mp3(&pcm, sr, &sample_mp3_path)
         .context("Failed to encode sample MP3")?;
+    spinner.finish_and_clear();
 
     // Determine model variant based on detected backend
     let backend = inference::detected_backend()
@@ -150,7 +183,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             name: name.clone(),
             profile_type: ProfileType::Designed,
             language: language_str.to_string(),
-            description: Some(args.description.clone()),
+            description: Some(description.clone()),
             source_audio: None,
             created: chrono::Utc::now().to_rfc3339(),
             model_variant,
@@ -166,12 +199,64 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     // Unload models to free memory
     let _ = inference::unload_all_models();
 
-    eprintln!(
-        "Voice profile '{}' saved to {}/",
-        name,
-        profile_dir.display()
-    );
-    eprintln!("  Sample: {}", sample_mp3_path.display());
+    // Print summary box
+    print_summary(&name, &description, language_str, attempt, &sample_mp3_path, &profile_dir);
 
     Ok(())
+}
+
+fn print_summary(
+    name: &str,
+    description: &str,
+    language: &str,
+    attempts: u32,
+    sample_path: &std::path::Path,
+    profile_dir: &std::path::Path,
+) {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let shorten = |s: &str| -> String {
+        if !home.is_empty() && s.starts_with(&home) {
+            format!("~{}", &s[home.len()..])
+        } else {
+            s.to_string()
+        }
+    };
+
+    let profile_str = shorten(&format!("{}/", profile_dir.display()));
+    let sample_str = shorten(&format!("{}", sample_path.display()));
+    let usage_str = format!("chatter generate \"text\" --profile {name}");
+    let title = format!("✓ Voice Profile Created: {name}");
+
+    let rows: Vec<(&str, String)> = vec![
+        ("Description", description.to_string()),
+        ("Language", language.to_string()),
+        ("Attempts", attempts.to_string()),
+        ("Profile", profile_str),
+        ("Sample", sample_str),
+        ("Usage", usage_str),
+    ];
+
+    let lw = 14;
+    let val_width = rows.iter().map(|(_, v)| v.len()).max().unwrap_or(30);
+    let title_width = title.len();
+    let inner = (lw + val_width).max(title_width) + 2;
+    let bar = "─".repeat(inner);
+    let vw = inner - lw - 2;
+
+    eprintln!();
+    eprintln!("  ╭{}╮", bar);
+    eprintln!("  │ {:<w$} │", title, w = inner - 2);
+    eprintln!("  ├{}┤", bar);
+    for (label, value) in &rows[..3] {
+        eprintln!("  │ {:<lw$}{:<vw$} │", format!("{label}:"), value);
+    }
+    eprintln!("  ├{}┤", bar);
+    for (label, value) in &rows[3..5] {
+        eprintln!("  │ {:<lw$}{:<vw$} │", format!("{label}:"), value);
+    }
+    eprintln!("  ├{}┤", bar);
+    let (label, value) = &rows[5];
+    eprintln!("  │ {:<lw$}{:<vw$} │", format!("{label}:"), value);
+    eprintln!("  ╰{}╯", bar);
+    eprintln!();
 }

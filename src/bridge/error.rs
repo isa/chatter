@@ -13,6 +13,9 @@ pub enum BridgeError {
     #[error("Python runtime not found. Ensure Python 3.12 is installed")]
     PythonNotFound,
 
+    #[error("Python venv not found. Reinstall chatter: brew reinstall chatter")]
+    VenvNotFound,
+
     #[error("No GPU available. Chatter requires Apple Silicon (MLX/MPS) or a CUDA GPU")]
     NoGpuAvailable,
 

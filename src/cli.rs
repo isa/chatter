@@ -66,7 +66,7 @@ pub enum Commands {
         command: ModelCommands,
     },
     /// Check environment, dependencies, and GPU
-    Doctor,
+    Doctor(DoctorArgs),
 }
 
 /// Arguments for the design subcommand.
@@ -132,6 +132,14 @@ pub enum ProfilesCommands {
         #[arg(short = 'y', long)]
         yes: bool,
     },
+}
+
+/// Arguments for the doctor subcommand.
+#[derive(Args, Debug)]
+pub struct DoctorArgs {
+    /// Auto-fix issues (download models, etc.)
+    #[arg(long)]
+    pub fix: bool,
 }
 
 /// Model management subcommands.
