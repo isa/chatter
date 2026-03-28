@@ -112,6 +112,10 @@ pub struct GenerateArgs {
     /// Play audio after generation
     #[arg(long)]
     pub play: bool,
+
+    /// Split output into separate files per chunk (e.g., output-001.mp3)
+    #[arg(long)]
+    pub split: bool,
 }
 
 /// Profile management subcommands.
