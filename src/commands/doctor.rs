@@ -18,25 +18,43 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let mut models_missing = false;
 
     // Venv
-    let venv_ok = bridge::is_venv_ready();
-    if venv_ok {
-        let venv_display = bridge::venv_path()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|_| "unknown".to_string());
-        ui::doctor_pass("Venv", &venv_display);
-        passes += 1;
-    } else {
-        match bridge::venv_path() {
-            Ok(p) => ui::doctor_fail(
-                "Venv",
-                &format!("not found at {}", p.display()),
-            ),
-            Err(_) => ui::doctor_fail(
+    let diagnosis = bridge::diagnose_venv();
+    let venv_ok = matches!(diagnosis, bridge::VenvDiagnosis::Ready);
+    match &diagnosis {
+        bridge::VenvDiagnosis::Ready => {
+            let venv_display = bridge::venv_path()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| "unknown".to_string());
+            ui::doctor_pass("Venv", &venv_display);
+            passes += 1;
+        }
+        bridge::VenvDiagnosis::NotFound => {
+            ui::doctor_fail(
                 "Venv",
                 "not found — set CHATTER_VENV or reinstall: brew reinstall chatter",
-            ),
+            );
+            fails += 1;
         }
-        fails += 1;
+        bridge::VenvDiagnosis::NoPython { venv_path } => {
+            ui::doctor_fail(
+                "Venv",
+                &format!(
+                    "found at {} but bin/python is missing — recreate venv",
+                    venv_path.display()
+                ),
+            );
+            fails += 1;
+        }
+        bridge::VenvDiagnosis::BridgeMissing { venv_path } => {
+            ui::doctor_fail(
+                "Venv",
+                &format!(
+                    "found at {} but chatter_bridge not installed — run any chatter command to auto-install",
+                    venv_path.display()
+                ),
+            );
+            fails += 1;
+        }
     }
 
     // Only run Python-dependent checks if venv is configured
@@ -156,12 +174,13 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     // Summary
     println!();
     if fails == 0 {
-        let msg = "All checks passed! Ready for TTS."
+        let msg = format!("All {passes} checks passed! Ready for TTS.");
+        let colored_msg = msg
             .if_supports_color(Stream::Stdout, |t| t.green().to_string())
             .to_string();
-        println!("{msg}");
+        println!("{colored_msg}");
     } else {
-        let msg = format!("{fails} issue(s) found. Fix the items marked \u{2717} above.");
+        let msg = format!("{passes} passed, {fails} failed. Fix the items marked \u{2717} above.");
         let colored_msg = msg
             .if_supports_color(Stream::Stdout, |t| t.red().to_string())
             .to_string();

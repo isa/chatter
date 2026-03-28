@@ -3,6 +3,19 @@ use std::process::{Command, Stdio};
 
 use super::error::BridgeError;
 
+/// Diagnostic result for venv health checks.
+#[derive(Debug)]
+pub enum VenvDiagnosis {
+    /// Venv is fully functional.
+    Ready,
+    /// No venv path could be resolved.
+    NotFound,
+    /// Venv directory exists but `bin/python` is missing.
+    NoPython { venv_path: PathBuf },
+    /// Python exists but `import chatter_bridge` fails.
+    BridgeMissing { venv_path: PathBuf },
+}
+
 /// The chatter_bridge.py source, embedded at compile time.
 const BRIDGE_MODULE_SOURCE: &str = include_str!("../../chatter_bridge.py");
 
@@ -58,7 +71,25 @@ pub fn venv_site_packages() -> Result<PathBuf, BridgeError> {
             }
         }
     }
-    Err(BridgeError::Other("Could not find site-packages in venv".to_string()))
+    // Provide a helpful error showing what's actually in lib/
+    let lib_contents: Vec<String> = if lib_dir.is_dir() {
+        std::fs::read_dir(&lib_dir)
+            .ok()
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .map(|e| e.file_name().to_string_lossy().to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+    Err(BridgeError::Other(format!(
+        "Could not find site-packages in venv at {}. lib/ contains: [{}]",
+        venv.display(),
+        lib_contents.join(", ")
+    )))
 }
 
 /// Check if the venv is found and has chatter_bridge importable.
@@ -76,6 +107,34 @@ pub fn is_venv_ready() -> bool {
         .stderr(Stdio::null())
         .output();
     matches!(output, Ok(o) if o.status.success())
+}
+
+/// Diagnose the venv state for the doctor command.
+///
+/// Returns a structured diagnosis that allows the doctor command to show
+/// specific, actionable error messages instead of a generic "not found".
+pub fn diagnose_venv() -> VenvDiagnosis {
+    let Ok(venv) = venv_path() else {
+        return VenvDiagnosis::NotFound;
+    };
+    let python = venv_python_path(&venv);
+    if !python.exists() {
+        return VenvDiagnosis::NoPython {
+            venv_path: venv,
+        };
+    }
+    let output = Command::new(&python)
+        .args(["-c", "import chatter_bridge"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+    if matches!(output, Ok(ref o) if o.status.success()) {
+        VenvDiagnosis::Ready
+    } else {
+        VenvDiagnosis::BridgeMissing {
+            venv_path: venv,
+        }
+    }
 }
 
 /// Ensure the chatter_bridge.py module is installed and up-to-date in the venv.
