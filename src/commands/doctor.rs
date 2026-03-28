@@ -4,134 +4,152 @@ use pyo3::prelude::*;
 use crate::bridge;
 use crate::bridge::doctor::get_system_info;
 use crate::bridge::runtime::ComputeBackend;
-use crate::cli::GlobalArgs;
+use crate::cli::{DoctorArgs, GlobalArgs};
 use crate::ui;
 
-pub fn run(global: &GlobalArgs) -> anyhow::Result<()> {
-    // Header
+pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let header = "Chatter Environment Check"
         .if_supports_color(Stream::Stdout, |t| t.bold().to_string())
         .to_string();
     println!("\n{header}\n");
 
-    let info = get_system_info();
     let mut passes = 0u32;
     let mut fails = 0u32;
+    let mut models_missing = false;
 
-    // Managed Venv
-    if bridge::is_venv_ready() {
+    // Venv
+    let venv_ok = bridge::is_venv_ready();
+    if venv_ok {
         let venv_display = bridge::venv_path()
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| "unknown".to_string());
         ui::doctor_pass("Venv", &venv_display);
         passes += 1;
     } else {
-        ui::doctor_fail(
-            "Venv",
-            "not set up \u{2014} run any command to auto-create, or `chatter doctor` again after installing Python 3.12+",
-        );
+        match bridge::venv_path() {
+            Ok(p) => ui::doctor_fail(
+                "Venv",
+                &format!("not found at {}", p.display()),
+            ),
+            Err(_) => ui::doctor_fail(
+                "Venv",
+                "not found — reinstall: brew reinstall chatter",
+            ),
+        }
         fails += 1;
     }
 
-    // Python Runtime
-    match &info.python_version {
-        Some(version) => {
-            ui::doctor_pass("Python", version);
-            passes += 1;
-        }
-        None => {
-            ui::doctor_fail("Python", "not found \u{2014} install Python 3.12+");
-            fails += 1;
-        }
-    }
+    // Only run Python-dependent checks if venv is configured
+    if venv_ok {
+        let spinner = ui::create_spinner("Checking environment");
+        let info = get_system_info();
+        spinner.finish_and_clear();
 
-    // qwen-tts Package
-    match &info.qwen_tts_version {
-        Some(version) => {
-            ui::doctor_pass("qwen-tts", version);
-            passes += 1;
-        }
-        None => {
-            ui::doctor_fail("qwen-tts", "not installed \u{2014} venv may need repair");
-            fails += 1;
-        }
-    }
-
-    // PyTorch
-    match &info.torch_version {
-        Some(version) => {
-            ui::doctor_pass("PyTorch", version);
-            passes += 1;
-        }
-        None => {
-            ui::doctor_fail(
-                "PyTorch",
-                "not installed \u{2014} installed automatically with qwen-tts",
-            );
-            fails += 1;
-        }
-    }
-
-    // Compute Backend
-    match &info.backend {
-        Some(ComputeBackend::Cuda { name, vram_bytes }) => {
-            let vram_gb = *vram_bytes as f64 / 1e9;
-            ui::doctor_pass("GPU", &format!("{name} ({vram_gb:.1} GB VRAM)"));
-            passes += 1;
-        }
-        Some(ComputeBackend::Mlx { memory_bytes }) => {
-            let mem_gb = *memory_bytes as f64 / 1e9;
-            ui::doctor_pass(
-                "GPU",
-                &format!("Apple Silicon via MLX ({mem_gb:.1} GB)"),
-            );
-            passes += 1;
-        }
-        Some(ComputeBackend::Mps) => {
-            ui::doctor_warn(
-                "GPU",
-                "Apple Silicon via MPS (MLX recommended for better performance)",
-            );
-            passes += 1; // MPS works, just not optimal
-        }
-        Some(ComputeBackend::Cpu) => {
-            ui::doctor_fail(
-                "GPU",
-                "no GPU detected \u{2014} chatter requires Apple Silicon or CUDA GPU",
-            );
-            fails += 1;
-        }
-        None => {
-            ui::doctor_fail("GPU", "detection failed");
-            fails += 1;
-        }
-    }
-
-    // Model Cache / Disk
-    if let Some(path) = &info.hf_cache_path {
-        if let Some(size_gb) = info.hf_cache_size_gb {
-            if size_gb > 0.01 {
-                println!(
-                    "  {} Model cache: {path} ({size_gb:.1} GB)",
-                    " ".if_supports_color(Stream::Stdout, |_t| " ".to_string())
-                );
+        // Python Runtime
+        match &info.python_version {
+            Some(version) => {
+                ui::doctor_pass("Python", version);
+                passes += 1;
+            }
+            None => {
+                ui::doctor_fail("Python", "not found");
+                fails += 1;
             }
         }
-    }
 
-    match info.disk_free_gb {
-        Some(free) if free < 10.0 => {
-            ui::doctor_warn(
-                "Disk",
-                &format!("{free:.1} GB free \u{2014} models need 3-7 GB each"),
-            );
+        // Inference package
+        match &info.inference_pkg_version {
+            Some(version) => {
+                ui::doctor_pass(&info.inference_pkg_name, version);
+                passes += 1;
+            }
+            None => {
+                ui::doctor_fail(
+                    &info.inference_pkg_name,
+                    "not installed — reinstall: brew reinstall chatter",
+                );
+                fails += 1;
+            }
         }
-        Some(free) => {
-            ui::doctor_pass("Disk", &format!("{free:.1} GB free"));
-            passes += 1;
+
+        // Compute Backend
+        match &info.backend {
+            Some(ComputeBackend::Cuda { name, vram_bytes }) => {
+                let vram_gb = *vram_bytes as f64 / 1e9;
+                ui::doctor_pass("GPU", &format!("{name} ({vram_gb:.1} GB VRAM)"));
+                passes += 1;
+            }
+            Some(ComputeBackend::Mlx { memory_bytes }) => {
+                let mem_gb = *memory_bytes as f64 / 1e9;
+                ui::doctor_pass("GPU", &format!("Apple Silicon via MLX ({mem_gb:.1} GB)"));
+                passes += 1;
+            }
+            Some(ComputeBackend::Mps) => {
+                ui::doctor_warn(
+                    "GPU",
+                    "Apple Silicon via MPS (MLX recommended for better performance)",
+                );
+                passes += 1;
+            }
+            Some(ComputeBackend::Cpu) => {
+                ui::doctor_fail(
+                    "GPU",
+                    "no GPU detected — chatter requires Apple Silicon or CUDA GPU",
+                );
+                fails += 1;
+            }
+            None => {
+                ui::doctor_fail("GPU", "detection failed");
+                fails += 1;
+            }
         }
-        None => {
-            ui::doctor_warn("Disk", "could not determine free space");
+
+        // Models
+        match bridge::list_cached_models() {
+            Ok(models) if !models.is_empty() => {
+                let total_bytes: u64 = models.iter().filter_map(|m| m.size_bytes).sum();
+                let total_gb = total_bytes as f64 / 1_073_741_824.0;
+                ui::doctor_pass(
+                    "Models",
+                    &format!("{} downloaded ({total_gb:.1} GB)", models.len()),
+                );
+                passes += 1;
+            }
+            _ => {
+                ui::doctor_fail(
+                    "Models",
+                    "not downloaded — run: chatter model download",
+                );
+                fails += 1;
+                models_missing = true;
+            }
+        }
+
+        // HF Cache / Disk
+        if let Some(path) = &info.hf_cache_path {
+            if let Some(size_gb) = info.hf_cache_size_gb {
+                if size_gb > 0.01 {
+                    println!(
+                        "    Model cache: {path} ({size_gb:.1} GB)",
+                    );
+                }
+            }
+        }
+
+        match info.disk_free_gb {
+            Some(free) if free < 10.0 => {
+                ui::doctor_warn(
+                    "Disk",
+                    &format!("{free:.1} GB free — models need 3-7 GB each"),
+                );
+            }
+            Some(free) => {
+                ui::doctor_pass("Disk", &format!("{free:.1} GB free"));
+                passes += 1;
+            }
+            None => {
+                ui::doctor_warn("Disk", "could not determine free space");
+            }
         }
     }
 
@@ -148,30 +166,52 @@ pub fn run(global: &GlobalArgs) -> anyhow::Result<()> {
             .if_supports_color(Stream::Stdout, |t| t.red().to_string())
             .to_string();
         println!("{colored_msg}");
+
+        if models_missing && !args.fix {
+            println!();
+            println!("To download models:  chatter model download");
+            println!("To auto-fix all:     chatter doctor --fix");
+        }
+    }
+
+    // --fix: auto-download models if missing
+    if args.fix && models_missing && venv_ok {
+        println!();
+        println!("Downloading models...");
+        let spinner = ui::create_spinner("Downloading Qwen3-TTS 1.7B models");
+        match bridge::download_model() {
+            Ok(()) => {
+                spinner.finish_with_message("Models downloaded");
+                println!();
+                let msg = "Fixed! All models downloaded."
+                    .if_supports_color(Stream::Stdout, |t| t.green().to_string())
+                    .to_string();
+                println!("{msg}");
+            }
+            Err(e) => {
+                spinner.abandon_with_message("Download failed");
+                return Err(anyhow::anyhow!(e).context("Model download failed"));
+            }
+        }
     }
 
     // Verbose output
     if global.verbose {
         println!("\n--- Verbose Diagnostics ---");
-        if let Some(path) = &info.hf_cache_path {
-            println!("HF cache path: {path}");
-        }
-        if let Some(backend) = &info.backend {
-            println!("Backend details: {backend:?}");
-        }
-        // Print Python sys.path (first 3 entries)
-        pyo3::Python::attach(|py| {
-            if let Ok(sys) = py.import("sys") {
-                if let Ok(path) = sys.getattr("path") {
-                    if let Ok(path_list) = path.extract::<Vec<String>>() {
-                        println!("Python sys.path (first 3):");
-                        for p in path_list.iter().take(3) {
-                            println!("  {p}");
+        if venv_ok {
+            pyo3::Python::attach(|py| {
+                if let Ok(sys) = py.import("sys") {
+                    if let Ok(path) = sys.getattr("path") {
+                        if let Ok(path_list) = path.extract::<Vec<String>>() {
+                            println!("Python sys.path (first 3):");
+                            for p in path_list.iter().take(3) {
+                                println!("  {p}");
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
     }
 
     println!();

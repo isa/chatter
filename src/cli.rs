@@ -29,10 +29,6 @@ pub struct GlobalArgs {
     /// Language for TTS output
     #[arg(long, global = true, value_enum, default_value_t = Language::Auto)]
     pub language: Language,
-
-    /// Model size to use
-    #[arg(long, global = true, value_enum, default_value_t = ModelSize::B1_7)]
-    pub model_size: ModelSize,
 }
 
 /// Supported languages for Qwen3-TTS.
@@ -49,15 +45,6 @@ pub enum Language {
     Portuguese,
     Russian,
     Italian,
-}
-
-/// Available model sizes.
-#[derive(ValueEnum, Debug, Clone, PartialEq, Eq)]
-pub enum ModelSize {
-    #[value(name = "0.6b")]
-    B0_6,
-    #[value(name = "1.7b")]
-    B1_7,
 }
 
 #[derive(Subcommand, Debug)]
@@ -79,7 +66,7 @@ pub enum Commands {
         command: ModelCommands,
     },
     /// Check environment, dependencies, and GPU
-    Doctor,
+    Doctor(DoctorArgs),
 }
 
 /// Arguments for the design subcommand.
@@ -118,9 +105,13 @@ pub struct GenerateArgs {
     #[arg(short, long)]
     pub profile: String,
 
-    /// Output file path (defaults to output.mp3)
+    /// Output file path (defaults to <profile-name>-<timestamp>.mp3)
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+
+    /// Play audio after generation
+    #[arg(long)]
+    pub play: bool,
 }
 
 /// Profile management subcommands.
@@ -143,21 +134,21 @@ pub enum ProfilesCommands {
     },
 }
 
+/// Arguments for the doctor subcommand.
+#[derive(Args, Debug)]
+pub struct DoctorArgs {
+    /// Auto-fix issues (download models, etc.)
+    #[arg(long)]
+    pub fix: bool,
+}
+
 /// Model management subcommands.
 #[derive(Subcommand, Debug)]
 pub enum ModelCommands {
-    /// Download a model variant
-    Download {
-        /// Model size to download
-        #[arg(value_enum, default_value_t = ModelSize::B1_7)]
-        size: ModelSize,
-    },
+    /// Download all 1.7B model variants
+    Download,
     /// List downloaded models and their disk usage
     List,
-    /// Remove a downloaded model
-    Remove {
-        /// Model size to remove
-        #[arg(value_enum)]
-        size: ModelSize,
-    },
+    /// Remove all downloaded 1.7B model variants
+    Remove,
 }

@@ -5,9 +5,10 @@ use super::runtime::{detect_backend_inner, ComputeBackend};
 /// All diagnostic information gathered by the doctor command.
 pub struct SystemInfo {
     pub python_version: Option<String>,
-    pub torch_version: Option<String>,
-    pub qwen_tts_version: Option<String>,
     pub backend: Option<ComputeBackend>,
+    /// The inference package version (mlx-audio on MLX, qwen-tts otherwise).
+    pub inference_pkg_name: String,
+    pub inference_pkg_version: Option<String>,
     pub disk_free_gb: Option<f64>,
     pub hf_cache_path: Option<String>,
     pub hf_cache_size_gb: Option<f64>,
@@ -20,17 +21,31 @@ pub struct SystemInfo {
 /// so any individual check can fail without crashing the whole report.
 pub fn get_system_info() -> SystemInfo {
     Python::attach(|py| {
+        // Suppress deprecation warnings (e.g., mx.metal.device_info)
+        let _ = py.run(
+            pyo3::ffi::c_str!("import warnings; warnings.filterwarnings('ignore')"),
+            None,
+            None,
+        );
         let python_version = get_python_version(py);
-        let torch_version = get_package_version(py, "torch");
-        let qwen_tts_version = get_package_version(py, "qwen-tts");
         let backend = detect_backend_inner(py).ok();
+
+        // Check the correct inference package based on detected backend
+        let is_mlx = matches!(backend, Some(ComputeBackend::Mlx { .. }));
+        let (inference_pkg_name, pip_name) = if is_mlx {
+            ("mlx-audio".to_string(), "mlx-audio")
+        } else {
+            ("qwen-tts".to_string(), "qwen-tts")
+        };
+        let inference_pkg_version = get_package_version(py, pip_name);
+
         let (disk_free_gb, hf_cache_path, hf_cache_size_gb) = get_disk_info(py);
 
         SystemInfo {
             python_version,
-            torch_version,
-            qwen_tts_version,
             backend,
+            inference_pkg_name,
+            inference_pkg_version,
             disk_free_gb,
             hf_cache_path,
             hf_cache_size_gb,

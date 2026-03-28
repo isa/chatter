@@ -1,9 +1,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyIterator;
 
-use crate::cli::ModelSize;
-
 use super::error::BridgeError;
+use super::runtime::ComputeBackend;
 
 /// Information about a cached model.
 pub struct ModelInfo {
@@ -13,27 +12,26 @@ pub struct ModelInfo {
     pub size_bytes: Option<u64>,
 }
 
-/// All Qwen3-TTS model variants for a given size.
-fn model_variants(size: &ModelSize) -> Vec<String> {
-    match size {
-        ModelSize::B1_7 => vec![
+/// All Qwen3-TTS 1.7B model variants.
+/// Returns MLX variants if backend is MLX, otherwise PyTorch variants.
+pub fn model_variants(backend: &ComputeBackend) -> Vec<String> {
+    match backend {
+        ComputeBackend::Mlx { .. } => vec![
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16".to_string(),
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16".to_string(),
+            "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16".to_string(),
+        ],
+        _ => vec![
             "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign".to_string(),
             "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice".to_string(),
             "Qwen/Qwen3-TTS-12Hz-1.7B-Base".to_string(),
-        ],
-        ModelSize::B0_6 => vec![
-            "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice".to_string(),
-            "Qwen/Qwen3-TTS-12Hz-0.6B-Base".to_string(),
         ],
     }
 }
 
 /// Return a human-readable label for the model size.
-pub fn size_label(size: &ModelSize) -> &'static str {
-    match size {
-        ModelSize::B1_7 => "1.7B",
-        ModelSize::B0_6 => "0.6B",
-    }
+pub fn size_label() -> &'static str {
+    "1.7B"
 }
 
 /// Import huggingface_hub, returning a friendly error if not installed.
@@ -50,12 +48,14 @@ fn import_hf_hub(py: Python<'_>) -> Result<Bound<'_, PyModule>, BridgeError> {
     }
 }
 
-/// Download all model variants for the given size from HuggingFace.
+/// Download all 1.7B model variants from HuggingFace.
 ///
+/// Detects the compute backend to choose PyTorch or MLX variants.
 /// Uses `huggingface_hub.snapshot_download()` which downloads model files
 /// to the default HF cache (`~/.cache/huggingface/hub/`).
-pub fn download_model(size: &ModelSize) -> Result<(), BridgeError> {
-    let variants = model_variants(size);
+pub fn download_model() -> Result<(), BridgeError> {
+    let backend = super::runtime::detect_backend()?;
+    let variants = model_variants(&backend);
 
     Python::attach(|py| {
         let hf_hub = import_hf_hub(py)?;
@@ -72,7 +72,7 @@ pub fn download_model(size: &ModelSize) -> Result<(), BridgeError> {
 /// List all Qwen3-TTS models in the local HuggingFace cache.
 ///
 /// Scans the HF cache directory and filters for repos matching
-/// the `Qwen/Qwen3-TTS-12Hz-` prefix.
+/// the `Qwen/Qwen3-TTS-12Hz-` or `mlx-community/Qwen3-TTS-12Hz-` prefix.
 pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
     Python::attach(|py| {
         let hf_hub = import_hf_hub(py)?;
@@ -87,7 +87,9 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
             let repo: Bound<'_, PyAny> = repo?;
             let repo_id: String = repo.getattr("repo_id")?.extract()?;
 
-            if !repo_id.starts_with("Qwen/Qwen3-TTS-12Hz-") {
+            if !repo_id.starts_with("Qwen/Qwen3-TTS-12Hz-")
+                && !repo_id.starts_with("mlx-community/Qwen3-TTS-12Hz-")
+            {
                 continue;
             }
 
@@ -95,9 +97,7 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
             let repo_path: String = repo.getattr("repo_path")?.str()?.extract()?;
 
             // Extract a human-readable size label from the repo ID
-            let label = if repo_id.contains("0.6B") {
-                "0.6B"
-            } else if repo_id.contains("1.7B") {
+            let label = if repo_id.contains("1.7B") {
                 "1.7B"
             } else {
                 "unknown"
@@ -115,12 +115,14 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
     })
 }
 
-/// Remove all cached model variants for the given size.
+/// Remove all cached 1.7B model variants.
 ///
+/// Detects the compute backend to determine which variant repos to remove.
 /// Uses `huggingface_hub.scan_cache_dir()` to find matching revisions
 /// and deletes them via the cache management API.
-pub fn remove_model(size: &ModelSize) -> Result<(), BridgeError> {
-    let variants = model_variants(size);
+pub fn remove_model() -> Result<(), BridgeError> {
+    let backend = super::runtime::detect_backend()?;
+    let variants = model_variants(&backend);
 
     Python::attach(|py| {
         let hf_hub = import_hf_hub(py)?;
@@ -151,15 +153,12 @@ pub fn remove_model(size: &ModelSize) -> Result<(), BridgeError> {
         if revision_hashes.is_empty() {
             return Err(BridgeError::ModelNotFound(format!(
                 "No cached models found for size {}",
-                size_label(size)
+                size_label()
             )));
         }
 
         // Use the delete_revisions strategy from huggingface_hub
-        let delete_strategy = cache_info.call_method1(
-            "delete_revisions",
-            (revision_hashes,),
-        )?;
+        let delete_strategy = cache_info.call_method1("delete_revisions", (revision_hashes,))?;
         delete_strategy.call_method0("execute")?;
 
         Ok(())

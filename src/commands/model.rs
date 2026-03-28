@@ -48,18 +48,14 @@ fn print_error(err: &anyhow::Error, verbose: bool) {
 
 pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
     match command {
-        ModelCommands::Download { size } => {
-            let label = size_label(&size);
-            let variant_desc = match &size {
-                crate::cli::ModelSize::B1_7 => "VoiceDesign, CustomVoice, Base",
-                crate::cli::ModelSize::B0_6 => "CustomVoice, Base",
-            };
+        ModelCommands::Download => {
+            let label = size_label();
 
-            println!("Downloading Qwen3-TTS {label} models ({variant_desc})...");
+            println!("Downloading Qwen3-TTS {label} models (VoiceDesign, CustomVoice, Base)...");
 
             let spinner = create_spinner(&format!("Downloading Qwen3-TTS {label}"));
 
-            match bridge::model::download_model(&size) {
+            match bridge::model::download_model() {
                 Ok(()) => {
                     spinner.finish_with_message(format!("Qwen3-TTS {label} download complete"));
                 }
@@ -98,11 +94,11 @@ pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
             }
         }
 
-        ModelCommands::Remove { size } => {
-            let label = size_label(&size);
+        ModelCommands::Remove => {
+            let label = size_label();
             let spinner = create_spinner(&format!("Removing Qwen3-TTS {label}"));
 
-            match bridge::model::remove_model(&size) {
+            match bridge::model::remove_model() {
                 Ok(()) => {
                     spinner.finish_with_message(format!("Qwen3-TTS {label} removed"));
                 }
