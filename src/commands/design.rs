@@ -43,11 +43,8 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         // First attempt: load model without spinner so Python's download/checkpoint
         // progress shows through. Subsequent attempts: model is cached, use spinner.
         if attempt == 1 {
-            let was_cached = inference::ensure_model_loaded("design")
+            let _was_cached = inference::ensure_model_loaded("design")
                 .map_err(|e| anyhow::anyhow!(e).context("Failed to load VoiceDesign model"))?;
-            if !was_cached {
-                eprintln!();
-            }
         }
 
         let spinner = ui::create_spinner(if attempt == 1 {
@@ -60,7 +57,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
 
         let (wav, sr) = match result {
             Ok(data) => {
-                spinner.finish_and_clear();
+                ui::finish_spinner(&spinner, "Voice designed");
                 data
             }
             Err(e) => {
@@ -76,9 +73,10 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         audio::encode_wav_to_mp3(&pcm, sr, &temp_mp3)
             .context("Failed to encode preview audio")?;
 
-        eprintln!("\n  Playing preview...\n");
+        let play_spinner = ui::create_spinner("Playing preview...");
         audio::playback::play_audio(&temp_mp3)
             .context("Failed to play preview audio")?;
+        ui::finish_spinner(&play_spinner, "Preview played");
         let _ = fs::remove_file(&temp_mp3);
 
         // Interactive menu
@@ -176,7 +174,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let pcm = audio::samples_f32_to_i16(&wav);
     audio::encode_wav_to_mp3(&pcm, sr, &sample_mp3_path)
         .context("Failed to encode sample MP3")?;
-    spinner.finish_and_clear();
+    ui::finish_spinner(&spinner, "Voice profile saved");
 
     // Determine model variant based on detected backend
     let backend = inference::detected_backend()
