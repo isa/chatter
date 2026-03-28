@@ -1,12 +1,14 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use owo_colors::{OwoColorize, Stream, Style};
 
 use crate::audio;
 use crate::bridge::inference;
+use crate::chunk;
 use crate::cli::{GenerateArgs, GlobalArgs, Language};
+use crate::extract;
 use crate::profile::storage;
 use crate::ui;
 
@@ -36,14 +38,71 @@ fn format_file_size(bytes: u64) -> String {
     }
 }
 
+/// Generate zero-valued f32 samples for silence gaps between chunks.
+fn silence_samples(duration_ms: u32, sample_rate: u32) -> Vec<f32> {
+    vec![0.0f32; ((sample_rate as u64 * duration_ms as u64) / 1000) as usize]
+}
+
+/// Concatenate audio chunks with silence gaps between them.
+/// All chunks must have the same sample rate.
+fn concatenate_chunks(chunks: &[(Vec<f32>, u32)], gap_ms: u32) -> (Vec<f32>, u32) {
+    assert!(!chunks.is_empty(), "Cannot concatenate empty chunks");
+    let sample_rate = chunks[0].1;
+    // Verify all sample rates match
+    for (i, (_, sr)) in chunks.iter().enumerate().skip(1) {
+        assert_eq!(
+            *sr, sample_rate,
+            "Sample rate mismatch: chunk 0 has {sample_rate}, chunk {i} has {sr}"
+        );
+    }
+
+    let gap = silence_samples(gap_ms, sample_rate);
+    let total_len: usize =
+        chunks.iter().map(|(s, _)| s.len()).sum::<usize>() + gap.len() * (chunks.len() - 1);
+    let mut combined = Vec::with_capacity(total_len);
+
+    for (i, (samples, _)) in chunks.iter().enumerate() {
+        if i > 0 {
+            combined.extend_from_slice(&gap);
+        }
+        combined.extend_from_slice(samples);
+    }
+
+    (combined, sample_rate)
+}
+
+/// Generate a split output path with 3-digit zero-padded index.
+/// e.g., "foo.mp3" + index 1 -> "foo-001.mp3"
+fn split_output_path(base: &Path, index: usize) -> PathBuf {
+    let stem = base
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy();
+    let ext = base
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy();
+    let filename = format!("{stem}-{index:03}.{ext}");
+    match base.parent() {
+        Some(parent) if parent != Path::new("") => parent.join(filename),
+        _ => PathBuf::from(filename),
+    }
+}
+
 pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
-    // 1. Get text input -- only inline text supported in Phase 2
+    // 1. Get text input -- inline text or file extraction
     let text = match (&args.text, &args.file) {
         (Some(t), _) => t.clone(),
-        (None, Some(_)) => {
-            anyhow::bail!(
-                "File input is not yet supported. It will be available in a future update."
-            );
+        (None, Some(file_path)) => {
+            // D-11: "Reading file..." spinner
+            let spinner = ui::create_spinner("Reading file...");
+            let raw = extract::extract_text(file_path)
+                .context(format!("Failed to process file: {}", file_path.display()))?;
+            spinner.finish_and_clear();
+            if raw.trim().is_empty() {
+                anyhow::bail!("No text content found in file: {}", file_path.display());
+            }
+            raw
         }
         (None, None) => {
             anyhow::bail!(
@@ -73,6 +132,9 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         );
     }
 
+    // ref_text is the transcript of the reference audio (needed for MLX voice cloning)
+    let ref_text = &profile.audio.sample_text;
+
     // 4. Resolve language per GEN-06: CLI flag overrides profile default
     let language_str = if global.language != Language::Auto {
         language_to_str(&global.language)
@@ -94,42 +156,112 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         }
     };
 
-    // 6. Check if output file exists per D-16
-    if output_path.exists() {
-        let warn_style = Style::new().yellow().bold();
+    // 6. Chunk the text
+    let chunks = chunk::chunk_by_paragraph(&text);
+    if chunks.is_empty() {
+        anyhow::bail!("No synthesizable text content found");
+    }
+
+    // 7. Load model with spinner (all Python output is suppressed)
+    {
+        let spinner = ui::create_spinner("Loading model...");
+        inference::ensure_model_loaded("custom")
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("Failed to load speech model")?;
+        ui::finish_spinner(&spinner, "Model loaded");
+    }
+
+    // 8. Synthesize audio with spinner/progress bar
+    let mut audio_parts: Vec<(Vec<f32>, u32)> = Vec::with_capacity(chunks.len());
+    if chunks.len() == 1 {
+        let spinner = ui::create_spinner("Generating audio...");
+        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text)
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("Speech generation failed")?;
+        audio_parts.push((wav, sr));
+        ui::finish_spinner(&spinner, "Audio generated");
+    } else {
+        let pb = ui::create_progress_bar(chunks.len() as u64, "Generating audio");
+        for chunk_text in &chunks {
+            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text)
+                .map_err(|e| anyhow::anyhow!(e))
+                .context("Speech generation failed")?;
+            audio_parts.push((wav, sr));
+            pb.inc(1);
+        }
+        ui::finish_spinner(&pb, "Audio generated");
+    }
+
+    // 9. Encode to MP3
+    let num_parts = audio_parts.len();
+    let is_split = args.split && num_parts > 1;
+    if is_split {
+        for (i, (wav, sr)) in audio_parts.iter().enumerate() {
+            let pcm = audio::samples_f32_to_i16(wav);
+            let chunk_path = split_output_path(&output_path, i + 1);
+            audio::encode_wav_to_mp3(&pcm, *sr, &chunk_path)
+                .context("MP3 encoding failed")?;
+        }
+    } else {
+        let (combined, sr) = if audio_parts.len() == 1 {
+            audio_parts.into_iter().next().unwrap()
+        } else {
+            concatenate_chunks(&audio_parts, 300)
+        };
+        let pcm = audio::samples_f32_to_i16(&combined);
+        audio::encode_wav_to_mp3(&pcm, sr, &output_path)
+            .context("MP3 encoding failed")?;
+    }
+
+    // 10. Unload models to free memory
+    let _ = inference::unload_all_models();
+
+    // 11. Print completion
+    let file_size = fs::metadata(&output_path)
+        .map(|m| format_file_size(m.len()))
+        .unwrap_or_default();
+
+    // Resolve to absolute path for the "Done" line
+    let abs_output_dir = if output_path.is_absolute() {
+        output_path.parent().unwrap_or_else(|| Path::new("/")).to_path_buf()
+    } else {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        match output_path.parent() {
+            Some(p) if !p.as_os_str().is_empty() => cwd.join(p),
+            _ => cwd,
+        }
+    };
+
+    eprintln!();
+    let done = "\u{2714} Done."
+        .if_supports_color(Stream::Stderr, |t| t.green().bold().to_string())
+        .to_string();
+    eprintln!("{done}");
+
+    let dir_str = abs_output_dir.display().to_string();
+    let bold_path = dir_str
+        .as_str()
+        .if_supports_color(Stream::Stderr, |t| t.bold().to_string())
+        .to_string();
+    eprintln!("\nSaved to: {bold_path}");
+
+    if is_split {
+        let stem = output_path.file_stem().unwrap_or_default().to_string_lossy();
         eprintln!(
-            "{} Overwriting existing file: {}",
-            "Warning:".if_supports_color(Stream::Stderr, |t| t.style(warn_style)),
-            output_path.display()
+            "\n\u{1F4C1} Generated {num_parts} files: {stem}-001.mp3 \u{2192} {stem}-{num_parts:03}.mp3",
+        );
+    } else {
+        eprintln!(
+            "\n\u{1F3B5} {}  {}",
+            output_path.display(),
+            format!("({file_size})")
+                .if_supports_color(Stream::Stderr, |t| t.dimmed().to_string()),
         );
     }
 
-    // 7. Show spinner per D-17 and UX-02
-    let spinner = ui::create_spinner("Generating speech...");
-
-    // 8. Call inference
-    let (wav, sr) = inference::generate_speech(&text, language_str, &profile_dir)
-        .map_err(|e| anyhow::anyhow!(e))
-        .context("Speech generation failed")?;
-
-    // 9. Finish spinner
-    spinner.finish_and_clear();
-
-    // 10. Encode to MP3 per GEN-05
-    let pcm = audio::samples_f32_to_i16(&wav);
-    audio::encode_wav_to_mp3(&pcm, sr, &output_path).context("MP3 encoding failed")?;
-
-    // 11. Unload models to free memory
-    let _ = inference::unload_all_models();
-
-    // 12. Print success with file size
-    let file_size = fs::metadata(&output_path)
-        .map(|m| format_file_size(m.len()))
-        .unwrap_or_else(|_| "unknown size".to_string());
-    eprintln!("Generated: {} ({})", output_path.display(), file_size);
-
-    // 13. Play audio per D-18
-    if args.play {
+    // 12. Play audio (skip in split mode)
+    if !args.no_play && !is_split {
+        eprintln!();
         audio::playback::play_audio(&output_path).context("Audio playback failed")?;
     }
 

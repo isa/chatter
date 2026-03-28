@@ -15,10 +15,11 @@ _models = {}
 
 @contextlib.contextmanager
 def _suppress_output():
-    """Suppress stdout/stderr from noisy Python libraries (tqdm, flash-attn, sox warnings).
+    """Suppress stdout/stderr from noisy Python libraries during inference.
 
     Captures all output to devnull so it doesn't fight with Rust's indicatif spinner.
-    Warnings (like flash-attn) are also suppressed.
+    Only used around inference calls -- model loading lets output through so users
+    see download progress and checkpoint loading status.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -33,6 +34,26 @@ def _suppress_output():
             sys.stderr.close()
             sys.stdout = old_stdout
             sys.stderr = old_stderr
+
+
+@contextlib.contextmanager
+def _suppress_warnings_only():
+    """Suppress Python warnings but let stdout/stderr through.
+
+    Used during model loading so HF download progress and checkpoint loading
+    messages are visible, while noisy warnings (flash-attn, deprecation) are hidden.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        # Suppress only stdout (import chatter, library banners) but keep stderr
+        # so that tqdm/HF progress bars (which write to stderr) are visible.
+        old_stdout = sys.stdout
+        try:
+            sys.stdout = open(os.devnull, "w")
+            yield
+        finally:
+            sys.stdout.close()
+            sys.stdout = old_stdout
 
 
 def detect_backend():
@@ -176,23 +197,27 @@ def load_clone_prompt(path):
     return torch.load(path, map_location=device)
 
 
-def generate_speech(text, language, profile_dir):
+def generate_speech(text, language, profile_dir, ref_text=""):
     """Generate speech from text using a saved profile.
     profile_dir should contain either voice_prompt.bin (CUDA/MPS) or ref_audio.wav (MLX).
+    ref_text is the transcript of ref_audio.wav (needed for MLX voice cloning).
     Returns (list_of_floats, sample_rate).
     """
     import numpy as np
     backend = detect_backend()
-    model = load_custom_voice_model()
     with _suppress_output():
         if backend == "mlx":
+            # MLX voice cloning uses the Base model with ref_audio + ref_text
+            model = load_base_model()
             ref_audio_path = os.path.join(profile_dir, "ref_audio.wav")
             results = list(model.generate(
-                text=text, language=language, ref_audio=ref_audio_path
+                text=text, language=language,
+                ref_audio=ref_audio_path, ref_text=ref_text,
             ))
             audio = np.array(results[0].audio, dtype=np.float32)
             return audio.tolist(), 24000
         else:
+            model = load_custom_voice_model()
             import torch
             prompt_path = os.path.join(profile_dir, "voice_prompt.bin")
             device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
@@ -230,6 +255,34 @@ def voice_clone_from_audio(ref_audio_path, text, language):
             )
             audio = wavs[0].cpu().numpy().astype(np.float32)
             return audio.tolist(), int(sr)
+
+
+def is_model_loaded(model_type):
+    """Check if a model is already cached. Returns True/False."""
+    return model_type in _models
+
+
+def ensure_model(model_type):
+    """Load a model by type name if not already cached.
+    model_type: 'design', 'base', or 'custom'
+    Returns True if the model was already loaded, False if it had to be loaded now.
+    For MLX, 'custom' loads the base model (MLX voice cloning uses Base, not CustomVoice).
+    """
+    backend = detect_backend()
+    # MLX voice cloning uses the Base model, not CustomVoice
+    effective_type = model_type
+    if model_type == "custom" and backend == "mlx":
+        effective_type = "base"
+    was_loaded = effective_type in _models
+    if effective_type == "design":
+        load_design_model()
+    elif effective_type == "base":
+        load_base_model()
+    elif effective_type == "custom":
+        load_custom_voice_model()
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
+    return was_loaded
 
 
 def unload_all_models():

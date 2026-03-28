@@ -1,7 +1,9 @@
 mod audio;
 mod bridge;
+mod chunk;
 mod cli;
 mod commands;
+mod extract;
 mod profile;
 mod ui;
 
@@ -33,6 +35,9 @@ fn run() -> anyhow::Result<()> {
     if needs_python(&cli.command) {
         setup_python()?;
     }
+
+    // Breathing room between command prompt and output
+    eprintln!();
 
     match cli.command {
         Commands::Design(args) => commands::design::run(args, &cli.global),

@@ -116,8 +116,6 @@ pub fn configure_python_for_venv() -> Result<(), BridgeError> {
     unsafe { std::env::set_var("PYTHONPATH", &site_packages) };
     // Suppress torchaudio's noisy SoX backend probe
     unsafe { std::env::set_var("TORCHAUDIO_BACKEND", "soundfile") };
-    // Suppress HuggingFace Hub tqdm progress bars (fight with indicatif spinner)
-    unsafe { std::env::set_var("HF_HUB_DISABLE_PROGRESS_BARS", "1") };
     // Suppress tokenizers parallelism warning
     unsafe { std::env::set_var("TOKENIZERS_PARALLELISM", "false") };
     // Suppress Python warnings in child processes (multiprocessing resource_tracker)
