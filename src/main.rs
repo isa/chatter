@@ -1,7 +1,9 @@
 mod audio;
 mod bridge;
+mod chunk;
 mod cli;
 mod commands;
+mod extract;
 mod profile;
 mod ui;
 
