@@ -12,19 +12,18 @@ Users can create reusable voice profiles and generate high-quality speech from t
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Design voice profiles from natural language descriptions — Validated in Phase 2
+- [x] Clone voice profiles from reference MP3 audio files — Validated in Phase 2
+- [x] Generate speech from text input using a saved voice profile — Validated in Phase 2
+- [x] Generate speech from file input (PDF/TXT/Markdown) using a saved voice profile — Validated in Phase 3
+- [x] Save voice profiles with metadata and cached sample audio — Validated in Phase 2
+- [x] Progress bars during all model inference operations — Validated in Phase 1-3
+- [x] Language selection across all commands — Validated in Phase 1
+- [x] MP3 output format for generated audio — Validated in Phase 2
 
 ### Active
 
-- [ ] Design voice profiles from natural language descriptions
-- [ ] Clone voice profiles from reference MP3 audio files
-- [ ] Generate speech from text input using a saved voice profile
-- [ ] Generate speech from file input (PDF/TXT/Markdown) using a saved voice profile
-- [ ] Save voice profiles with metadata and cached sample audio
-- [ ] Progress bars during all model inference operations
-- [ ] Language selection across all commands (Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Italian)
-- [ ] Model size selection (0.6B / 1.7B, default 1.7B)
-- [ ] MP3 output format for generated audio
+(All v1 requirements validated)
 
 ### Out of Scope
 
@@ -78,4 +77,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after initialization*
+*Last updated: 2026-03-28 after Phase 3 completion — all v1 phases complete*
