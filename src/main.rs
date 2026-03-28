@@ -33,11 +33,15 @@ fn run() -> anyhow::Result<()> {
 
     // Commands that need Python: ensure venv is found and configured
     if needs_python(&cli.command) {
-        setup_python()?;
+        let spinner = ui::create_spinner("Starting...");
+        match setup_python() {
+            Ok(()) => ui::finish_spinner(&spinner, "Ready"),
+            Err(e) => {
+                spinner.finish_and_clear();
+                return Err(e);
+            }
+        }
     }
-
-    // Breathing room between command prompt and output
-    eprintln!();
 
     match cli.command {
         Commands::Design(args) => commands::design::run(args, &cli.global),
