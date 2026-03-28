@@ -34,6 +34,16 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
     pb
 }
 
+/// Finish a spinner, replacing it with a green checkmark and the message.
+/// Prints a newline after so subsequent output appears on its own line.
+pub fn finish_spinner(pb: &ProgressBar, message: &str) {
+    let check = "\u{2714}"
+        .if_supports_color(Stream::Stderr, |t| t.green().to_string())
+        .to_string();
+    pb.finish_and_clear();
+    eprintln!("{check} {message}");
+}
+
 /// Print error to stderr with colored prefix per D-05, D-06.
 pub fn print_error(msg: &str, verbose_detail: Option<&str>, verbose: bool) {
     let prefix = "Error:"

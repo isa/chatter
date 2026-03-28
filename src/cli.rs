@@ -109,9 +109,9 @@ pub struct GenerateArgs {
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
-    /// Play audio after generation
+    /// Skip playing audio after generation
     #[arg(long)]
-    pub play: bool,
+    pub no_play: bool,
 
     /// Split output into separate files per chunk (e.g., output-001.mp3)
     #[arg(long)]

@@ -36,6 +36,9 @@ fn run() -> anyhow::Result<()> {
         setup_python()?;
     }
 
+    // Breathing room between command prompt and output
+    eprintln!();
+
     match cli.command {
         Commands::Design(args) => commands::design::run(args, &cli.global),
         Commands::Clone(args) => commands::clone::run(args, &cli.global),

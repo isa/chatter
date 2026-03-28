@@ -132,6 +132,9 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         );
     }
 
+    // ref_text is the transcript of the reference audio (needed for MLX voice cloning)
+    let ref_text = &profile.audio.sample_text;
+
     // 4. Resolve language per GEN-06: CLI flag overrides profile default
     let language_str = if global.language != Language::Auto {
         language_to_str(&global.language)
@@ -153,94 +156,112 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         }
     };
 
-    // 6. Check if output file exists per D-16
-    if output_path.exists() {
-        let warn_style = Style::new().yellow().bold();
-        eprintln!(
-            "{} Overwriting existing file: {}",
-            "Warning:".if_supports_color(Stream::Stderr, |t| t.style(warn_style)),
-            output_path.display()
-        );
-    }
-
-    // 7. Chunk the text per D-03
+    // 6. Chunk the text
     let chunks = chunk::chunk_by_paragraph(&text);
     if chunks.is_empty() {
         anyhow::bail!("No synthesizable text content found");
     }
 
-    // 8. Multi-chunk synthesis with progress per D-11, D-12
+    // 7. Load model with spinner (all Python output is suppressed)
+    {
+        let spinner = ui::create_spinner("Loading model...");
+        inference::ensure_model_loaded("custom")
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("Failed to load speech model")?;
+        ui::finish_spinner(&spinner, "Model loaded");
+    }
+
+    // 8. Synthesize audio with spinner/progress bar
     let mut audio_parts: Vec<(Vec<f32>, u32)> = Vec::with_capacity(chunks.len());
     if chunks.len() == 1 {
-        // Single chunk: use spinner (same as inline text behavior)
-        let spinner = ui::create_spinner("Generating speech...");
-        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir)
+        let spinner = ui::create_spinner("Generating audio...");
+        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text)
             .map_err(|e| anyhow::anyhow!(e))
             .context("Speech generation failed")?;
         audio_parts.push((wav, sr));
-        spinner.finish_and_clear();
+        ui::finish_spinner(&spinner, "Audio generated");
     } else {
-        // Multiple chunks: use bounded progress bar per D-12
-        let pb = ui::create_progress_bar(chunks.len() as u64, "Synthesizing");
+        let pb = ui::create_progress_bar(chunks.len() as u64, "Generating audio");
         for chunk_text in &chunks {
-            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir)
+            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text)
                 .map_err(|e| anyhow::anyhow!(e))
                 .context("Speech generation failed")?;
             audio_parts.push((wav, sr));
             pb.inc(1);
         }
-        pb.finish_and_clear();
+        ui::finish_spinner(&pb, "Audio generated");
     }
 
-    // 9. Encode to MP3 per D-04
-    if args.split && audio_parts.len() > 1 {
-        // D-04: Split mode -- separate file per chunk
-        let spinner = ui::create_spinner("Encoding MP3 files...");
+    // 9. Encode to MP3
+    let num_parts = audio_parts.len();
+    let is_split = args.split && num_parts > 1;
+    if is_split {
         for (i, (wav, sr)) in audio_parts.iter().enumerate() {
             let pcm = audio::samples_f32_to_i16(wav);
             let chunk_path = split_output_path(&output_path, i + 1);
             audio::encode_wav_to_mp3(&pcm, *sr, &chunk_path)
                 .context("MP3 encoding failed")?;
         }
-        spinner.finish_and_clear();
-        eprintln!(
-            "Generated {} files: {}-001.mp3 through {}-{:03}.mp3",
-            audio_parts.len(),
-            output_path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy(),
-            output_path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy(),
-            audio_parts.len()
-        );
     } else {
-        // Default: single concatenated output
-        let spinner = ui::create_spinner("Encoding MP3...");
         let (combined, sr) = if audio_parts.len() == 1 {
             audio_parts.into_iter().next().unwrap()
         } else {
-            concatenate_chunks(&audio_parts, 300) // 300ms silence gap between chunks
+            concatenate_chunks(&audio_parts, 300)
         };
         let pcm = audio::samples_f32_to_i16(&combined);
         audio::encode_wav_to_mp3(&pcm, sr, &output_path)
             .context("MP3 encoding failed")?;
-        spinner.finish_and_clear();
-
-        // Print success with file size
-        let file_size = fs::metadata(&output_path)
-            .map(|m| format_file_size(m.len()))
-            .unwrap_or_else(|_| "unknown size".to_string());
-        eprintln!("Generated: {} ({})", output_path.display(), file_size);
     }
 
     // 10. Unload models to free memory
     let _ = inference::unload_all_models();
 
-    // 11. Play audio per D-18 (skip in split mode -- no single file to play)
-    if args.play && !args.split {
+    // 11. Print completion
+    let file_size = fs::metadata(&output_path)
+        .map(|m| format_file_size(m.len()))
+        .unwrap_or_default();
+
+    // Resolve to absolute path for the "Done" line
+    let abs_output_dir = if output_path.is_absolute() {
+        output_path.parent().unwrap_or_else(|| Path::new("/")).to_path_buf()
+    } else {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        match output_path.parent() {
+            Some(p) if !p.as_os_str().is_empty() => cwd.join(p),
+            _ => cwd,
+        }
+    };
+
+    eprintln!();
+    let done = "\u{2714} Done."
+        .if_supports_color(Stream::Stderr, |t| t.green().bold().to_string())
+        .to_string();
+    eprintln!("{done}");
+
+    let dir_str = abs_output_dir.display().to_string();
+    let bold_path = dir_str
+        .as_str()
+        .if_supports_color(Stream::Stderr, |t| t.bold().to_string())
+        .to_string();
+    eprintln!("\nSaved to: {bold_path}");
+
+    if is_split {
+        let stem = output_path.file_stem().unwrap_or_default().to_string_lossy();
+        eprintln!(
+            "\n\u{1F4C1} Generated {num_parts} files: {stem}-001.mp3 \u{2192} {stem}-{num_parts:03}.mp3",
+        );
+    } else {
+        eprintln!(
+            "\n\u{1F3B5} {}  {}",
+            output_path.display(),
+            format!("({file_size})")
+                .if_supports_color(Stream::Stderr, |t| t.dimmed().to_string()),
+        );
+    }
+
+    // 12. Play audio (skip in split mode)
+    if !args.no_play && !is_split {
+        eprintln!();
         audio::playback::play_audio(&output_path).context("Audio playback failed")?;
     }
 

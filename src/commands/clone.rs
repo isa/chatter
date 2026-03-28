@@ -22,10 +22,18 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     // 3. Resolve language
     let language_str = language_to_string(&global.language);
 
-    // 4. Show spinner
-    let spinner = ui::create_spinner("Cloning voice from reference audio...");
+    // 4. Load model (no spinner — let Python's download/checkpoint progress show)
+    {
+        let was_cached = bridge::ensure_model_loaded("custom")
+            .map_err(|e| anyhow::anyhow!(e))
+            .context("Failed to load speech model")?;
+        if !was_cached {
+            eprintln!();
+        }
+    }
 
     // 5. Generate preview sample using reference audio directly
+    let spinner = ui::create_spinner("Cloning voice from reference audio...");
     let (wav, sr) = match bridge::voice_clone_from_audio(&args.audio_file, PREVIEW_SENTENCE, &language_str) {
         Ok(result) => result,
         Err(e) => {

@@ -27,9 +27,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Speech Generation
 
 - [x] **GEN-01**: User can generate speech from inline text using a saved voice profile via `chatter generate`
-- [ ] **GEN-02**: User can generate speech from a TXT file path via `chatter generate --file <path>`
-- [ ] **GEN-03**: User can generate speech from a Markdown file path (formatting stripped before synthesis)
-- [ ] **GEN-04**: User can generate speech from a PDF file path (basic text extraction)
+- [x] **GEN-02**: User can generate speech from a TXT file path via `chatter generate --file <path>`
+- [x] **GEN-03**: User can generate speech from a Markdown file path (formatting stripped before synthesis)
+- [x] **GEN-04**: User can generate speech from a PDF file path (basic text extraction)
 - [x] **GEN-05**: Generated audio is saved as MP3 to a user-specified or default output path
 - [x] **GEN-06**: Language flag on generate overrides the profile's default language when specified
 
@@ -94,9 +94,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-05 | Phase 2 | Complete |
 | PROF-06 | Phase 2 | Complete |
 | GEN-01 | Phase 2 | Complete |
-| GEN-02 | Phase 3 | Pending |
-| GEN-03 | Phase 3 | Pending |
-| GEN-04 | Phase 3 | Pending |
+| GEN-02 | Phase 3 | Complete |
+| GEN-03 | Phase 3 | Complete |
+| GEN-04 | Phase 3 | Complete |
 | GEN-05 | Phase 2 | Complete |
 | GEN-06 | Phase 2 | Complete |
 | UX-01 | Phase 1 | Complete |
