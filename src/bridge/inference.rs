@@ -33,10 +33,14 @@ pub fn create_and_save_clone_prompt(
 
         if backend == "mlx" {
             // MLX: copy reference audio to profile as ref_audio.wav
+            // Skip if source and destination are the same file (e.g., design command
+            // already saved ref_audio.wav to the profile dir before calling this).
             let dest = profile_dir.join("ref_audio.wav");
-            std::fs::copy(ref_audio_path, &dest).map_err(|e| {
-                BridgeError::VoiceCloneFailed(format!("Failed to copy ref audio: {e}"))
-            })?;
+            if ref_audio_path != dest {
+                std::fs::copy(ref_audio_path, &dest).map_err(|e| {
+                    BridgeError::VoiceCloneFailed(format!("Failed to copy ref audio: {e}"))
+                })?;
+            }
         } else {
             // CUDA/MPS: create and save clone prompt
             let prompt = bridge.call_method1(
@@ -54,17 +58,19 @@ pub fn create_and_save_clone_prompt(
 }
 
 /// Generate speech from text using a saved profile.
+/// `ref_text` is the transcript of the profile's reference audio (needed for MLX voice cloning).
 /// Returns (audio_samples_f32, sample_rate).
 pub fn generate_speech(
     text: &str,
     language: &str,
     profile_dir: &Path,
+    ref_text: &str,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let result = bridge.call_method1(
             "generate_speech",
-            (text, language, profile_dir.to_string_lossy().as_ref()),
+            (text, language, profile_dir.to_string_lossy().as_ref(), ref_text),
         )?;
         let wav: Vec<f32> = result.get_item(0)?.extract()?;
         let sr: u32 = result.get_item(1)?.extract()?;
@@ -88,6 +94,16 @@ pub fn voice_clone_from_audio(
         let wav: Vec<f32> = result.get_item(0)?.extract()?;
         let sr: u32 = result.get_item(1)?.extract()?;
         Ok((wav, sr))
+    })
+}
+
+/// Ensure a model is loaded, returning whether it was already cached.
+/// model_type: "design", "base", or "custom"
+pub fn ensure_model_loaded(model_type: &str) -> Result<bool, BridgeError> {
+    Python::attach(|py| {
+        let bridge = import_bridge(py)?;
+        let was_loaded: bool = bridge.call_method1("ensure_model", (model_type,))?.extract()?;
+        Ok(was_loaded)
     })
 }
 

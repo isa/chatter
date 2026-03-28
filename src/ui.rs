@@ -19,6 +19,31 @@ pub fn create_spinner(message: &str) -> ProgressBar {
     pb
 }
 
+/// Create a bounded progress bar for chunk synthesis per D-12.
+pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{spinner:.cyan} {msg} ({pos}/{len}) [{bar:30}] ({elapsed})",
+        )
+        .expect("valid template")
+        .progress_chars("=>-"),
+    );
+    pb.set_message(message.to_string());
+    pb.enable_steady_tick(Duration::from_millis(100));
+    pb
+}
+
+/// Finish a spinner, replacing it with a green checkmark and the message.
+/// Prints a newline after so subsequent output appears on its own line.
+pub fn finish_spinner(pb: &ProgressBar, message: &str) {
+    let check = "\u{2714}"
+        .if_supports_color(Stream::Stderr, |t| t.green().to_string())
+        .to_string();
+    pb.finish_and_clear();
+    eprintln!("{check} {message}");
+}
+
 /// Print error to stderr with colored prefix per D-05, D-06.
 pub fn print_error(msg: &str, verbose_detail: Option<&str>, verbose: bool) {
     let prefix = "Error:"

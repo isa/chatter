@@ -11,7 +11,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let header = "Chatter Environment Check"
         .if_supports_color(Stream::Stdout, |t| t.bold().to_string())
         .to_string();
-    println!("\n{header}\n");
+    println!("{header}\n");
 
     let mut passes = 0u32;
     let mut fails = 0u32;
@@ -33,7 +33,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             ),
             Err(_) => ui::doctor_fail(
                 "Venv",
-                "not found — reinstall: brew reinstall chatter",
+                "not found — set CHATTER_VENV or reinstall: brew reinstall chatter",
             ),
         }
         fails += 1;
@@ -66,7 +66,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             None => {
                 ui::doctor_fail(
                     &info.inference_pkg_name,
-                    "not installed — reinstall: brew reinstall chatter",
+                    "not installed — pip install qwen-tts (or brew reinstall chatter)",
                 );
                 fails += 1;
             }

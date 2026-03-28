@@ -40,11 +40,21 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let (wav, sr) = loop {
         attempt += 1;
 
-        let spinner = if attempt == 1 {
-            ui::create_spinner("Loading VoiceDesign model and designing voice...")
+        // First attempt: load model without spinner so Python's download/checkpoint
+        // progress shows through. Subsequent attempts: model is cached, use spinner.
+        if attempt == 1 {
+            let was_cached = inference::ensure_model_loaded("design")
+                .map_err(|e| anyhow::anyhow!(e).context("Failed to load VoiceDesign model"))?;
+            if !was_cached {
+                eprintln!();
+            }
+        }
+
+        let spinner = ui::create_spinner(if attempt == 1 {
+            "Designing voice..."
         } else {
-            ui::create_spinner(&format!("Designing voice (attempt {attempt})..."))
-        };
+            "Designing voice..."
+        });
 
         let result = inference::voice_design(PREVIEW_SENTENCE, language_str, &description);
 
