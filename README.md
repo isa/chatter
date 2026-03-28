@@ -106,19 +106,25 @@ On Apple Silicon, the MLX-optimized variants (`mlx-community/Qwen3-TTS-*-bf16`) 
 ### Prerequisites
 
 - Rust 1.85+ (edition 2024)
-- Python 3.12+
+- [mise](https://mise.jdx.dev/) (recommended) or Python 3.12+ installed manually
 - Apple Silicon Mac or CUDA GPU
 
 ### Building from source
 
 ```sh
+# Install pinned tool versions (Python 3.12.3)
+mise install
+
+# Build
 cargo build --release
 ```
 
-PyO3 auto-detects the Python installation at build time. Set `PYO3_PYTHON` if you need a specific version:
+`mise` reads `mise.toml` in the project root, which pins Python 3.12.3 and sets `PYO3_PYTHON` so PyO3 links against the correct interpreter automatically.
+
+If you don't use mise, set `PYO3_PYTHON` manually:
 
 ```sh
-PYO3_PYTHON=python3.14 cargo build --release
+PYO3_PYTHON=python3.12 cargo build --release
 ```
 
 ### Setting up the dev venv

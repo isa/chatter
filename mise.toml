@@ -1,0 +1,5 @@
+[tools]
+python = "3.12.3"
+
+[env]
+PYO3_PYTHON = "python3"
