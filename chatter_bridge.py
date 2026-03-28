@@ -153,13 +153,15 @@ def voice_design(text, language, instruct):
     with _suppress_output():
         if backend == "mlx":
             results = list(model.generate_voice_design(
-                text=text, language=language, instruct=instruct
+                text=text, language=language, instruct=instruct,
+                temperature=0.7
             ))
             audio = np.array(results[0].audio, dtype=np.float32)
             return audio.tolist(), 24000
         else:
             wavs, sr = model.generate_voice_design(
-                text=text, language=language, instruct=instruct
+                text=text, language=language, instruct=instruct,
+                temperature=0.7
             )
             audio = wavs[0].cpu().numpy().astype(np.float32)
             return audio.tolist(), int(sr)
