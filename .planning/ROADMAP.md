@@ -78,7 +78,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [ ] 07-01-PLAN.md -- Engine-grouped model listing and disk space pre-check for ChatterBox downloads
-- [ ] 07-02-PLAN.md -- Extend doctor command with ChatterBox diagnostics and --fix support
+- [x] 07-02-PLAN.md -- Extend doctor command with ChatterBox diagnostics and --fix support
 
 ### Phase 08: ChatterBox Controls
 **Goal**: Users can leverage ChatterBox-specific audio generation features not available in Qwen3-TTS
@@ -103,5 +103,5 @@ Note: Phase 07 and Phase 08 both depend on Phase 06 but are independent of each 
 | 04. Engine Abstraction | v1.1 | 0/1 | Planning complete | - |
 | 05. CLI Engine Routing | v1.1 | 0/1 | Planning complete | - |
 | 06. ChatterBox Inference | v1.1 | 2/2 | Complete | 2026-03-29 |
-| 07. Model Management and Diagnostics | v1.1 | 0/2 | Planning complete | - |
+| 07. Model Management and Diagnostics | v1.1 | 1/2 | In Progress|  |
 | 08. ChatterBox Controls | v1.1 | 0/TBD | Not started | - |
