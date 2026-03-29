@@ -136,9 +136,14 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             Ok(models) if !models.is_empty() => {
                 let total_bytes: u64 = models.iter().filter_map(|m| m.size_bytes).sum();
                 let total_gb = total_bytes as f64 / 1_073_741_824.0;
+                // Show which quantization variant is cached
+                let quant_label = info.backend.as_ref()
+                    .and_then(|b| bridge::detect_cached_quantization(b).ok())
+                    .map(|q| q.label())
+                    .unwrap_or("bf16");
                 ui::doctor_pass(
                     "Models",
-                    &format!("{} downloaded ({total_gb:.1} GB)", models.len()),
+                    &format!("{} downloaded, {} variant ({total_gb:.1} GB)", models.len(), quant_label),
                 );
                 passes += 1;
             }
@@ -207,7 +212,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         println!();
         println!("Downloading models...");
         let spinner = ui::create_spinner("Downloading Qwen3-TTS 1.7B models");
-        match bridge::download_model() {
+        match bridge::download_model(bridge::ModelQuantization::Bf16) {
             Ok(()) => {
                 spinner.finish_with_message("Models downloaded");
                 println!();
