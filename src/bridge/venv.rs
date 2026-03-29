@@ -18,8 +18,11 @@ pub enum VenvDiagnosis {
     BridgeMissing { venv_path: PathBuf },
 }
 
-/// The chatter_bridge.py source, embedded at compile time.
-const BRIDGE_MODULE_SOURCE: &str = include_str!("../../chatter_bridge.py");
+/// The chatter_bridge package sources, embedded at compile time.
+const BRIDGE_INIT: &str = include_str!("../../chatter_bridge/__init__.py");
+const BRIDGE_ENGINES_INIT: &str = include_str!("../../chatter_bridge/engines/__init__.py");
+const BRIDGE_ENGINES_QWEN: &str = include_str!("../../chatter_bridge/engines/qwen.py");
+const BRIDGE_ENGINES_CHATTERBOX: &str = include_str!("../../chatter_bridge/engines/chatterbox.py");
 
 /// Discover the venv path. Resolution order:
 ///
@@ -148,21 +151,51 @@ pub fn diagnose_venv() -> VenvDiagnosis {
     }
 }
 
-/// Ensure the chatter_bridge.py module is installed and up-to-date in the venv.
+/// Ensure the chatter_bridge package is installed and up-to-date in the venv.
 ///
-/// Compares the embedded source against the installed copy. Writes (or overwrites)
+/// Compares the embedded sources against the installed copies. Writes (or overwrites)
 /// if missing or stale. This handles upgrades across chatter versions.
+/// Also cleans up the old single-file chatter_bridge.py if present (v1.0 upgrade path).
 pub fn ensure_bridge_installed() -> Result<(), BridgeError> {
     let site_packages = venv_site_packages()?;
-    let dest = site_packages.join("chatter_bridge.py");
-    let needs_write = if dest.exists() {
-        std::fs::read_to_string(&dest).map_or(true, |existing| existing != BRIDGE_MODULE_SOURCE)
-    } else {
-        true
-    };
-    if needs_write {
-        std::fs::write(&dest, BRIDGE_MODULE_SOURCE)
-            .map_err(|e| BridgeError::Other(format!("Failed to install chatter_bridge.py: {e}")))?;
+
+    // Clean up old single-file bridge if it exists (v1.0 upgrade path).
+    // A stale chatter_bridge.py would shadow the package directory.
+    let old_single_file = site_packages.join("chatter_bridge.py");
+    if old_single_file.is_file() {
+        std::fs::remove_file(&old_single_file).map_err(|e| {
+            BridgeError::Other(format!("Failed to remove old chatter_bridge.py: {e}"))
+        })?;
+    }
+
+    // Create package directory structure
+    let pkg_dir = site_packages.join("chatter_bridge");
+    let engines_dir = pkg_dir.join("engines");
+    std::fs::create_dir_all(&engines_dir).map_err(|e| {
+        BridgeError::Other(format!("Failed to create chatter_bridge package dirs: {e}"))
+    })?;
+
+    // Write each file if missing or stale
+    let files: [(PathBuf, &str); 4] = [
+        (pkg_dir.join("__init__.py"), BRIDGE_INIT),
+        (engines_dir.join("__init__.py"), BRIDGE_ENGINES_INIT),
+        (engines_dir.join("qwen.py"), BRIDGE_ENGINES_QWEN),
+        (engines_dir.join("chatterbox.py"), BRIDGE_ENGINES_CHATTERBOX),
+    ];
+    for (dest, source) in &files {
+        let needs_write = if dest.exists() {
+            std::fs::read_to_string(dest).map_or(true, |existing| existing != *source)
+        } else {
+            true
+        };
+        if needs_write {
+            std::fs::write(dest, source).map_err(|e| {
+                BridgeError::Other(format!(
+                    "Failed to install {}: {e}",
+                    dest.display()
+                ))
+            })?;
+        }
     }
     Ok(())
 }
