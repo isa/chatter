@@ -40,6 +40,7 @@ pbpaste | chatter generate --profile narrator -o clipboard.mp3
 ## Installation
 
 ```sh
+brew tap isa/tap
 brew install chatter
 ```
 
