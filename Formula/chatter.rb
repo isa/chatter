@@ -4,10 +4,8 @@ class Chatter < Formula
   license "MIT"
   version "1.0.0"
 
-  # For local testing, point to a tarball. For real releases, use a GitHub URL:
-  #   url "https://github.com/isa/chatter/archive/refs/tags/v#{version}.tar.gz"
-  #   sha256 "abc123..."
-  url "file://#{HOMEBREW_CACHE}/chatter-#{version}.tar.gz"
+  url "https://github.com/isa/chatter/archive/refs/tags/v#{version}.tar.gz"
+  sha256 "1ecd0a56da68b57ae66e9555b65259e02c42ea6130c0ff4a2b2dc4febd383aaf"
 
   depends_on "rust" => :build
   depends_on "python@3.12"
