@@ -19,6 +19,8 @@ brew install chatter
 
 Homebrew installs everything: the binary, a bundled Python venv with the correct inference backend (`mlx-audio` on Apple Silicon, `qwen-tts` on CUDA), and all Python dependencies. No manual setup needed.
 
+> **Heads up:** The Python dependencies are large. `mlx-audio` (Apple Silicon) pulls ~149 GB of packages including PyTorch and MLX frameworks. `qwen-tts` (CUDA) is similarly heavy. The initial `brew install` will take a while — grab a coffee.
+
 After installing, download the TTS models:
 
 ```sh
