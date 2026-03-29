@@ -59,18 +59,23 @@ pub fn create_and_save_clone_prompt(
 
 /// Generate speech from text using a saved profile.
 /// `ref_text` is the transcript of the profile's reference audio (needed for MLX voice cloning).
+/// `slow` mode lowers temperature and raises repetition_penalty for more natural pacing.
 /// Returns (audio_samples_f32, sample_rate).
 pub fn generate_speech(
     text: &str,
     language: &str,
     profile_dir: &Path,
     ref_text: &str,
+    slow: bool,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
+    let temperature: f64 = if slow { 0.5 } else { 0.7 };
+    let repetition_penalty: f64 = if slow { 1.4 } else { 1.2 };
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let result = bridge.call_method1(
             "generate_speech",
-            (text, language, profile_dir.to_string_lossy().as_ref(), ref_text),
+            (text, language, profile_dir.to_string_lossy().as_ref(), ref_text,
+             temperature, repetition_penalty),
         )?;
         let wav: Vec<f32> = result.get_item(0)?.extract()?;
         let sr: u32 = result.get_item(1)?.extract()?;

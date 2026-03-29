@@ -1,3 +1,4 @@
+mod docx;
 mod markdown;
 mod pdf;
 mod txt;
@@ -9,6 +10,7 @@ pub enum FileFormat {
     Txt,
     Markdown,
     Pdf,
+    Docx,
     Unknown,
 }
 
@@ -28,6 +30,7 @@ pub fn detect_format(path: &Path) -> FileFormat {
             }
             FileFormat::Pdf
         }
+        Some("docx") => FileFormat::Docx,
         _ => FileFormat::Unknown,
     }
 }
@@ -39,6 +42,7 @@ pub fn extract_text(path: &Path) -> anyhow::Result<String> {
         FileFormat::Txt => txt::extract(path),
         FileFormat::Markdown => markdown::extract(path),
         FileFormat::Pdf => pdf::extract(path),
+        FileFormat::Docx => docx::extract(path),
         FileFormat::Unknown => {
             let ext = path
                 .extension()

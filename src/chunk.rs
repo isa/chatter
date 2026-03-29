@@ -1,5 +1,45 @@
+use std::borrow::Cow;
+
 /// Maximum characters per chunk before sub-splitting at sentence boundaries.
 const MAX_CHUNK_CHARS: usize = 3000;
+
+/// Preprocess text to insert pause markers for more natural TTS pacing.
+///
+/// - Adds `...` after sentence-ending punctuation (`.` `!` `?`) for longer pauses
+/// - Adds `..` after commas, semicolons, and colons for short pauses
+/// - Splits sentences onto separate lines so the model sees natural boundaries
+pub fn add_pause_markers(text: &str) -> String {
+    let mut result = String::with_capacity(text.len() * 2);
+    let chars: Vec<char> = text.chars().collect();
+    let len = chars.len();
+    let mut i = 0;
+
+    while i < len {
+        let ch = chars[i];
+        result.push(ch);
+
+        match ch {
+            '.' | '!' | '?' => {
+                // Only add pauses if followed by a space (not abbreviations like "Dr.")
+                if i + 1 < len && chars[i + 1] == ' ' {
+                    result.push_str("...");
+                    result.push('\n');
+                    // Skip the space — the newline replaces it
+                    i += 1;
+                }
+            }
+            ',' | ';' | ':' => {
+                if i + 1 < len && chars[i + 1] == ' ' {
+                    result.push_str("..");
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    result
+}
 
 /// Split text into chunks by paragraph breaks (double newlines).
 ///

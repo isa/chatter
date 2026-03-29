@@ -93,11 +93,14 @@ pub struct CloneArgs {
 
 /// Arguments for the generate subcommand.
 #[derive(Args, Debug)]
+#[command(
+    override_usage = "chatter generate [TEXT] --profile <PROFILE> [--file <FILE>] [OPTIONS]\n       Supported file types: PDF, DOCX, TXT, Markdown"
+)]
 pub struct GenerateArgs {
-    /// Text to synthesize (reads from stdin if omitted)
+    /// Text to synthesize (or use --file for documents)
     pub text: Option<String>,
 
-    /// Input file (PDF, TXT, or Markdown)
+    /// Input file (PDF, DOCX, TXT, or Markdown) — chunks by paragraph, combines with silence gaps
     #[arg(short, long)]
     pub file: Option<PathBuf>,
 
@@ -116,6 +119,14 @@ pub struct GenerateArgs {
     /// Split output into separate files per chunk (e.g., output-001.mp3)
     #[arg(long)]
     pub split: bool,
+
+    /// Slower, more deliberate speech with longer pauses at punctuation
+    #[arg(long)]
+    pub slow: bool,
+
+    /// Preprocess text: insert pause markers at punctuation for more natural pacing
+    #[arg(long)]
+    pub natural_pace: bool,
 }
 
 /// Profile management subcommands.

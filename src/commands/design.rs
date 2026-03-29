@@ -221,50 +221,30 @@ fn print_summary(
     sample_path: &std::path::Path,
     profile_dir: &std::path::Path,
 ) {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let shorten = |s: &str| -> String {
-        if !home.is_empty() && s.starts_with(&home) {
-            format!("~{}", &s[home.len()..])
-        } else {
-            s.to_string()
-        }
-    };
-
-    let profile_str = shorten(&format!("{}/", profile_dir.display()));
-    let sample_str = shorten(&format!("{}", sample_path.display()));
-    let usage_str = format!("chatter generate \"text\" --profile {name}");
-    let title = format!("✓ Voice Profile Created: {name}");
-
-    let rows: Vec<(&str, String)> = vec![
-        ("Description", description.to_string()),
-        ("Language", language.to_string()),
-        ("Attempts", attempts.to_string()),
-        ("Profile", profile_str),
-        ("Sample", sample_str),
-        ("Usage", usage_str),
-    ];
-
-    let lw = 14;
-    let val_width = rows.iter().map(|(_, v)| v.len()).max().unwrap_or(30);
-    let title_width = title.len();
-    let inner = (lw + val_width).max(title_width) + 2;
-    let bar = "─".repeat(inner);
-    let vw = inner - lw - 2;
-
-    eprintln!();
-    eprintln!("  ╭{}╮", bar);
-    eprintln!("  │ {:<w$} │", title, w = inner - 2);
-    eprintln!("  ├{}┤", bar);
-    for (label, value) in &rows[..3] {
-        eprintln!("  │ {:<lw$}{:<vw$} │", format!("{label}:"), value);
-    }
-    eprintln!("  ├{}┤", bar);
-    for (label, value) in &rows[3..5] {
-        eprintln!("  │ {:<lw$}{:<vw$} │", format!("{label}:"), value);
-    }
-    eprintln!("  ├{}┤", bar);
-    let (label, value) = &rows[5];
-    eprintln!("  │ {:<lw$}{:<vw$} │", format!("{label}:"), value);
-    eprintln!("  ╰{}╯", bar);
-    eprintln!();
+    let title = format!("\u{2714} Voice Profile Created: {name}");
+    ui::print_summary_box(
+        &title,
+        &[
+            ui::SummarySection {
+                rows: vec![
+                    ("Description", description.to_string(), false),
+                    ("Language", language.to_string(), false),
+                    ("Attempts", attempts.to_string(), false),
+                ],
+            },
+            ui::SummarySection {
+                rows: vec![
+                    ("Profile", format!("{}/", profile_dir.display()), true),
+                    ("Sample", format!("{}", sample_path.display()), true),
+                ],
+            },
+            ui::SummarySection {
+                rows: vec![(
+                    "Usage",
+                    format!("chatter generate \"text\" --profile {name}"),
+                    false,
+                )],
+            },
+        ],
+    );
 }

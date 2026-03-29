@@ -154,14 +154,14 @@ def voice_design(text, language, instruct):
         if backend == "mlx":
             results = list(model.generate_voice_design(
                 text=text, language=language, instruct=instruct,
-                temperature=0.7
+                temperature=0.5
             ))
             audio = np.array(results[0].audio, dtype=np.float32)
             return audio.tolist(), 24000
         else:
             wavs, sr = model.generate_voice_design(
                 text=text, language=language, instruct=instruct,
-                temperature=0.7
+                temperature=0.5
             )
             audio = wavs[0].cpu().numpy().astype(np.float32)
             return audio.tolist(), int(sr)
@@ -199,10 +199,11 @@ def load_clone_prompt(path):
     return torch.load(path, map_location=device)
 
 
-def generate_speech(text, language, profile_dir, ref_text=""):
+def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2):
     """Generate speech from text using a saved profile.
     profile_dir should contain either voice_prompt.bin (CUDA/MPS) or ref_audio.wav (MLX).
     ref_text is the transcript of ref_audio.wav (needed for MLX voice cloning).
+    temperature and repetition_penalty control pacing (lower temp = more natural pauses).
     Returns (list_of_floats, sample_rate).
     """
     import numpy as np
@@ -215,6 +216,7 @@ def generate_speech(text, language, profile_dir, ref_text=""):
             results = list(model.generate(
                 text=text, language=language,
                 ref_audio=ref_audio_path, ref_text=ref_text,
+                temperature=temperature, repetition_penalty=repetition_penalty,
             ))
             audio = np.array(results[0].audio, dtype=np.float32)
             return audio.tolist(), 24000
@@ -225,7 +227,8 @@ def generate_speech(text, language, profile_dir, ref_text=""):
             device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
             prompt = torch.load(prompt_path, map_location=device)
             wavs, sr = model.generate_voice_clone(
-                text=text, language=language, voice_clone_prompt=prompt
+                text=text, language=language, voice_clone_prompt=prompt,
+                temperature=temperature, repetition_penalty=repetition_penalty,
             )
             audio = wavs[0].cpu().numpy().astype(np.float32)
             return audio.tolist(), int(sr)

@@ -22,3 +22,4 @@ dialoguer = "0.11"
 console = "0.15"
 pulldown-cmark = "0.13.3"
 pdf-extract = "0.10.0"
+zip = { version = "2", default-features = false, features = ["deflate"] }

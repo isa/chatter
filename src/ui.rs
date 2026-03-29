@@ -80,3 +80,88 @@ pub fn doctor_warn(label: &str, detail: &str) {
         .to_string();
     println!("  {warn} {label}: {detail}");
 }
+
+/// A row section in the summary box.
+pub struct SummarySection<'a> {
+    pub rows: Vec<(&'a str, String, bool)>, // (label, value, is_highlighted)
+}
+
+/// Print a bordered summary box that fits within terminal width.
+/// Sections are separated by horizontal rules. Highlighted rows get cyan color.
+///
+/// Layout: `  │ {label:<LW}{value:<VW} │`
+/// Total chrome per line: "  │ " (4) + " │" (2) = 6 chars.
+/// `inner` = the character count between the two │ chars (including the spaces).
+/// Print a bordered summary box that fits within terminal width.
+/// Sections are separated by horizontal rules. Highlighted rows get cyan color.
+///
+/// Uses `console::measure_text_width` for correct unicode width (handles
+/// multi-byte chars like ✔ that are 1 display column but >1 byte).
+pub fn print_summary_box(title: &str, sections: &[SummarySection<'_>]) {
+    use console::measure_text_width;
+
+    let term_width = console::Term::stderr().size().1 as usize;
+    // Chrome per line: "  │ " (4 left) + " │" (2 right) = 6 display columns.
+    let max_content = term_width.saturating_sub(6);
+    let lw: usize = 14;
+
+    let home = std::env::var("HOME").unwrap_or_default();
+    let shorten = |s: &str| -> String {
+        if !home.is_empty() && s.starts_with(&home) {
+            format!("~{}", &s[home.len()..])
+        } else {
+            s.to_string()
+        }
+    };
+
+    // Compute content width from longest row, capped at terminal
+    let mut cw = measure_text_width(title);
+    for section in sections {
+        for (_, val, _) in &section.rows {
+            cw = cw.max(lw + measure_text_width(&shorten(val)));
+        }
+    }
+    let cw = cw.min(max_content).max(30);
+    let vw = cw.saturating_sub(lw);
+    let bar = "\u{2500}".repeat(cw + 2);
+
+    // Print a row: pad `content` to `cw` display columns using `visible_width`.
+    let row = |content: &str, visible_width: usize| {
+        let pad = cw.saturating_sub(visible_width);
+        eprintln!("  \u{2502} {}{} \u{2502}", content, " ".repeat(pad));
+    };
+
+    eprintln!();
+    eprintln!("  \u{256D}{bar}\u{256E}");
+    row(title, measure_text_width(title));
+
+    for section in sections {
+        eprintln!("  \u{251C}{bar}\u{2524}");
+        for (label, val, highlighted) in &section.rows {
+            let short = shorten(val);
+            let val_width = measure_text_width(&short);
+            let display_val = if val_width > vw {
+                // Truncate by chars (values are ASCII paths, safe to count chars)
+                let limit = vw.saturating_sub(3);
+                let truncated: String = short.chars().take(limit).collect();
+                format!("{truncated}...")
+            } else {
+                short
+            };
+            let display_val_width = measure_text_width(&display_val);
+            let label_str = format!("{:<lw$}", format!("{label}:"));
+            let vis = lw + display_val_width;
+            if *highlighted {
+                let colored = display_val
+                    .as_str()
+                    .if_supports_color(Stream::Stderr, |t| t.cyan().to_string())
+                    .to_string();
+                row(&format!("{label_str}{colored}"), vis);
+            } else {
+                row(&format!("{label_str}{display_val}"), vis);
+            }
+        }
+    }
+    eprintln!("  \u{2570}{bar}\u{256F}");
+    eprintln!();
+}

@@ -106,7 +106,11 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         }
         (None, None) => {
             anyhow::bail!(
-                "Provide text to speak, e.g.: chatter generate \"Hello world\" --profile myvoice"
+                "Provide text or a file to speak.\n\n\
+                 Examples:\n  \
+                 chatter generate \"Hello world\" --profile myvoice\n  \
+                 chatter generate --file document.pdf --profile myvoice\n  \
+                 chatter generate --file notes.md --profile myvoice --split"
             );
         }
     };
@@ -156,8 +160,13 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         }
     };
 
-    // 6. Chunk the text
-    let chunks = chunk::chunk_by_paragraph(&text);
+    // 6. Preprocess and chunk the text
+    let processed = if args.natural_pace {
+        chunk::add_pause_markers(&text)
+    } else {
+        text
+    };
+    let chunks = chunk::chunk_by_paragraph(&processed);
     if chunks.is_empty() {
         anyhow::bail!("No synthesizable text content found");
     }
@@ -173,9 +182,10 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
 
     // 8. Synthesize audio with spinner/progress bar
     let mut audio_parts: Vec<(Vec<f32>, u32)> = Vec::with_capacity(chunks.len());
+    let slow = args.slow;
     if chunks.len() == 1 {
         let spinner = ui::create_spinner("Generating audio...");
-        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text)
+        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text, slow)
             .map_err(|e| anyhow::anyhow!(e))
             .context("Speech generation failed")?;
         audio_parts.push((wav, sr));
@@ -183,7 +193,7 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     } else {
         let pb = ui::create_progress_bar(chunks.len() as u64, "Generating audio");
         for chunk_text in &chunks {
-            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text)
+            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text, slow)
                 .map_err(|e| anyhow::anyhow!(e))
                 .context("Speech generation failed")?;
             audio_parts.push((wav, sr));

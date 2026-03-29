@@ -3,7 +3,8 @@ use std::path::Path;
 
 use anyhow::{bail, Context};
 use chrono::Utc;
-use owo_colors::{OwoColorize, Stream, Style};
+use dialoguer::{Input, Select};
+use owo_colors::Style;
 
 use crate::audio;
 use crate::bridge::inference as bridge;
@@ -12,84 +13,188 @@ use crate::profile::storage::{self, PREVIEW_SENTENCE};
 use crate::profile::{AudioInfo, ProfileInfo, ProfileMetadata, ProfileType};
 use crate::ui;
 
+/// Map Language enum to the string expected by the Python bridge.
+fn language_to_string(lang: &Language) -> String {
+    match lang {
+        Language::Auto => "auto".to_string(),
+        Language::Chinese => "Chinese".to_string(),
+        Language::English => "English".to_string(),
+        Language::Japanese => "Japanese".to_string(),
+        Language::Korean => "Korean".to_string(),
+        Language::French => "French".to_string(),
+        Language::German => "German".to_string(),
+        Language::Spanish => "Spanish".to_string(),
+        Language::Portuguese => "Portuguese".to_string(),
+        Language::Russian => "Russian".to_string(),
+        Language::Italian => "Italian".to_string(),
+    }
+}
+
 pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     // 1. Validate input file
     validate_audio_file(&args.audio_file)?;
 
-    // 2. Resolve profile name
-    let name = resolve_profile_name(&args)?;
-
-    // 3. Resolve language
     let language_str = language_to_string(&global.language);
 
-    // 4. Load model (no spinner — let Python's download/checkpoint progress show)
-    {
-        let was_cached = bridge::ensure_model_loaded("custom")
-            .map_err(|e| anyhow::anyhow!(e))
-            .context("Failed to load speech model")?;
-        if !was_cached {
-            eprintln!();
-        }
-    }
+    // Use system temp dir for previews during the clone loop
+    let temp_dir = std::env::temp_dir().join("chatter-preview");
+    fs::create_dir_all(&temp_dir)?;
 
-    // 5. Generate preview sample using reference audio directly
-    let spinner = ui::create_spinner("Cloning voice from reference audio...");
-    let (wav, sr) = match bridge::voice_clone_from_audio(&args.audio_file, PREVIEW_SENTENCE, &language_str) {
-        Ok(result) => result,
-        Err(e) => {
-            spinner.finish_and_clear();
-            ui::print_error(
-                "Voice cloning failed.",
-                Some(&format!("{e:#}")),
-                global.verbose,
-            );
-            return Err(e.into());
+    let mut attempt = 0u32;
+
+    // Interactive clone loop
+    let (wav, sr) = loop {
+        attempt += 1;
+
+        // First attempt: load model without spinner so Python's download/checkpoint
+        // progress shows through. Subsequent attempts: model is cached, use spinner.
+        if attempt == 1 {
+            let _was_cached = bridge::ensure_model_loaded("custom")
+                .map_err(|e| anyhow::anyhow!(e).context("Failed to load speech model"))?;
+        }
+
+        let spinner = ui::create_spinner("Cloning voice from reference audio...");
+        let result =
+            bridge::voice_clone_from_audio(&args.audio_file, PREVIEW_SENTENCE, &language_str);
+
+        let (wav, sr) = match result {
+            Ok(data) => {
+                ui::finish_spinner(&spinner, "Voice cloned");
+                data
+            }
+            Err(e) => {
+                spinner.finish_and_clear();
+                let _ = fs::remove_dir_all(&temp_dir);
+                return Err(anyhow::anyhow!(e).context("Voice cloning failed"));
+            }
+        };
+
+        // Encode preview to temp MP3
+        let temp_mp3 = temp_dir.join("preview.mp3");
+        let pcm = audio::samples_f32_to_i16(&wav);
+        audio::encode_wav_to_mp3(&pcm, sr, &temp_mp3)
+            .context("Failed to encode preview audio")?;
+
+        let play_spinner = ui::create_spinner("Playing preview...");
+        audio::playback::play_audio(&temp_mp3).context("Failed to play preview audio")?;
+        ui::finish_spinner(&play_spinner, "Preview played");
+        let _ = fs::remove_file(&temp_mp3);
+
+        // Interactive menu
+        let choices = &[
+            "Yes, accept this voice",
+            "No, retry",
+            "Quit",
+        ];
+
+        let selection = Select::new()
+            .with_prompt("What do you think?")
+            .items(choices)
+            .default(0)
+            .interact()?;
+
+        match selection {
+            0 => break (wav, sr),
+            1 => { /* retry */ }
+            2 => {
+                let _ = fs::remove_dir_all(&temp_dir);
+                anyhow::bail!("Voice cloning cancelled by user");
+            }
+            _ => unreachable!(),
         }
     };
 
-    // 6. Create profile directory
+    // Clean up temp dir
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    // Prompt for profile name
+    let default_name = match &args.name {
+        Some(n) => n.clone(),
+        None => {
+            let stem = args
+                .audio_file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("clone");
+            let slug = storage::slugify(stem, 4);
+            storage::unique_profile_name(&slug)?
+        }
+    };
+
+    let name: String = if args.name.is_some() {
+        default_name
+    } else {
+        Input::new()
+            .with_prompt("Profile name")
+            .default(default_name)
+            .interact_text()?
+            .trim()
+            .to_string()
+    };
+
+    if name.is_empty() {
+        anyhow::bail!("Profile name cannot be empty");
+    }
+
+    // Create profile directory
     let profile_dir = storage::profile_dir(&name)?;
     fs::create_dir_all(&profile_dir)
-        .context("Failed to create profile directory")?;
+        .with_context(|| format!("Failed to create profile directory: {}", profile_dir.display()))?;
 
-    // 7. Save clone prompt (voice_prompt.bin on CUDA/MPS, ref_audio.wav on MLX)
-    if let Err(e) = bridge::create_and_save_clone_prompt(&args.audio_file, PREVIEW_SENTENCE, &profile_dir) {
-        spinner.finish_and_clear();
-        ui::print_error(
-            "Failed to save clone prompt.",
-            Some(&format!("{e:#}")),
-            global.verbose,
-        );
-        return Err(e.into());
+    // Save clone prompt + reference audio + sample MP3
+    let spinner = ui::create_spinner("Saving voice profile...");
+
+    bridge::create_and_save_clone_prompt(&args.audio_file, PREVIEW_SENTENCE, &profile_dir)
+        .map_err(|e| anyhow::anyhow!(e).context("Failed to save clone prompt"))?;
+
+    // Save WAV to profile dir (needed for MLX which uses ref_audio directly)
+    let ref_wav_path = profile_dir.join("ref_audio.wav");
+    {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: sr,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut writer = hound::WavWriter::create(&ref_wav_path, spec)
+            .context("Failed to create WAV file")?;
+        for &sample in &wav {
+            writer
+                .write_sample(sample)
+                .context("Failed to write WAV sample")?;
+        }
+        writer.finalize().context("Failed to finalize WAV file")?;
     }
 
-    // 8. Encode preview to sample.mp3
+    // Encode accepted audio to sample.mp3
+    let sample_mp3_path = profile_dir.join("sample.mp3");
     let pcm = audio::samples_f32_to_i16(&wav);
-    audio::encode_wav_to_mp3(&pcm, sr, &profile_dir.join("sample.mp3"))?;
+    audio::encode_wav_to_mp3(&pcm, sr, &sample_mp3_path)
+        .context("Failed to encode sample MP3")?;
+    ui::finish_spinner(&spinner, "Voice profile saved");
 
-    // 9. Finish spinner
-    spinner.finish_and_clear();
-
-    // 10. Build and save ProfileMetadata
+    // Determine model variant based on detected backend
     let backend = bridge::detected_backend().unwrap_or_else(|_| "unknown".to_string());
     let model_variant = match backend.as_str() {
-        "mlx" => "mlx-community/Qwen3-TTS-0.6B-bf16".to_string(),
+        "mlx" => "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16".to_string(),
         _ => "Qwen/Qwen3-TTS-1.7B-CustomVoice".to_string(),
     };
+
+    // Build and save profile metadata
+    let source_audio = args
+        .audio_file
+        .canonicalize()
+        .unwrap_or_else(|_| args.audio_file.clone())
+        .to_string_lossy()
+        .to_string();
 
     let metadata = ProfileMetadata {
         profile: ProfileInfo {
             name: name.clone(),
             profile_type: ProfileType::Cloned,
-            language: language_str,
+            language: language_str.clone(),
             description: None,
-            source_audio: Some(
-                args.audio_file
-                    .canonicalize()
-                    .unwrap_or_else(|_| args.audio_file.clone())
-                    .to_string_lossy()
-                    .to_string(),
-            ),
+            source_audio: Some(source_audio.clone()),
             created: Utc::now().to_rfc3339(),
             model_variant,
         },
@@ -99,33 +204,30 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         },
     };
 
-    // 11. Save profile
-    storage::save_profile(&metadata)?;
+    storage::save_profile(&metadata).context("Failed to save profile metadata")?;
 
-    // 12. Unload models to free memory
+    // Unload models to free memory
     let _ = bridge::unload_all_models();
 
-    // 13. Print success
-    let sample_path = profile_dir.join("sample.mp3");
-    let success_style = Style::new().green().bold();
-    eprintln!(
-        "\n{} Voice profile '{}' saved.",
-        "Done:".if_supports_color(Stream::Stderr, |t| t.style(success_style)),
-        name
+    // Print summary box
+    print_summary(
+        &name,
+        &source_audio,
+        &language_str,
+        attempt,
+        &sample_mp3_path,
+        &profile_dir,
     );
-    eprintln!("Sample audio: {}", sample_path.display());
 
     Ok(())
 }
 
 /// Validate that the input audio file exists and has an acceptable format.
 fn validate_audio_file(path: &Path) -> anyhow::Result<()> {
-    // Check existence
     if !path.exists() {
         bail!("File not found: {}", path.display());
     }
 
-    // Check extension
     let ext = path
         .extension()
         .map(|e| e.to_ascii_lowercase())
@@ -139,7 +241,6 @@ fn validate_audio_file(path: &Path) -> anyhow::Result<()> {
         );
     }
 
-    // Check non-zero size
     let file_size = fs::metadata(path)
         .context("Cannot read file metadata")?
         .len();
@@ -148,18 +249,14 @@ fn validate_audio_file(path: &Path) -> anyhow::Result<()> {
         bail!("File is empty: {}", path.display());
     }
 
-    // Format-specific validation
     if ext_str == "wav" {
         validate_wav(path)?;
-    } else {
-        // MP3: basic sanity check on file size
-        if file_size < 1000 {
-            bail!(
-                "File is too small ({} bytes) to be a valid MP3: {}",
-                file_size,
-                path.display()
-            );
-        }
+    } else if file_size < 1000 {
+        bail!(
+            "File is too small ({} bytes) to be a valid MP3: {}",
+            file_size,
+            path.display()
+        );
     }
 
     Ok(())
@@ -167,6 +264,8 @@ fn validate_audio_file(path: &Path) -> anyhow::Result<()> {
 
 /// Validate WAV file properties and warn about unusual parameters.
 fn validate_wav(path: &Path) -> anyhow::Result<()> {
+    use owo_colors::{OwoColorize, Stream};
+
     let reader = hound::WavReader::open(path)
         .context("Failed to read WAV file. Is the file corrupted?")?;
 
@@ -196,35 +295,38 @@ fn validate_wav(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Resolve profile name from --name flag or audio filename.
-fn resolve_profile_name(args: &CloneArgs) -> anyhow::Result<String> {
-    let base = match &args.name {
-        Some(name) => name.clone(),
-        None => {
-            let stem = args
-                .audio_file
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("clone");
-            storage::slugify(stem, 4)
-        }
-    };
-    storage::unique_profile_name(&base)
-}
-
-/// Map Language enum to the string expected by the Python bridge.
-fn language_to_string(lang: &Language) -> String {
-    match lang {
-        Language::Auto => "auto".to_string(),
-        Language::Chinese => "Chinese".to_string(),
-        Language::English => "English".to_string(),
-        Language::Japanese => "Japanese".to_string(),
-        Language::Korean => "Korean".to_string(),
-        Language::French => "French".to_string(),
-        Language::German => "German".to_string(),
-        Language::Spanish => "Spanish".to_string(),
-        Language::Portuguese => "Portuguese".to_string(),
-        Language::Russian => "Russian".to_string(),
-        Language::Italian => "Italian".to_string(),
-    }
+fn print_summary(
+    name: &str,
+    source_audio: &str,
+    language: &str,
+    attempts: u32,
+    sample_path: &std::path::Path,
+    profile_dir: &std::path::Path,
+) {
+    let title = format!("\u{2714} Voice Profile Cloned: {name}");
+    ui::print_summary_box(
+        &title,
+        &[
+            ui::SummarySection {
+                rows: vec![
+                    ("Source", source_audio.to_string(), false),
+                    ("Language", language.to_string(), false),
+                    ("Attempts", attempts.to_string(), false),
+                ],
+            },
+            ui::SummarySection {
+                rows: vec![
+                    ("Profile", format!("{}/", profile_dir.display()), true),
+                    ("Sample", format!("{}", sample_path.display()), true),
+                ],
+            },
+            ui::SummarySection {
+                rows: vec![(
+                    "Usage",
+                    format!("chatter generate \"text\" --profile {name}"),
+                    false,
+                )],
+            },
+        ],
+    );
 }

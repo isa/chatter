@@ -1,0 +1,62 @@
+class Chatter < Formula
+  desc "Text-to-speech from the terminal, powered by Qwen3-TTS"
+  homepage "https://github.com/isa/chatter"
+  license "MIT"
+  version "0.1.0"
+
+  # For local testing, point to a tarball. For real releases, use a GitHub URL:
+  #   url "https://github.com/isa/chatter/archive/refs/tags/v#{version}.tar.gz"
+  #   sha256 "abc123..."
+  url "file://#{HOMEBREW_CACHE}/chatter-#{version}.tar.gz"
+
+  depends_on "rust" => :build
+  depends_on "python@3.12"
+
+  def python3
+    "python3.12"
+  end
+
+  def install
+    # Tell PyO3 to link against Homebrew's Python 3.12
+    ENV["PYO3_PYTHON"] = Formula["python@3.12"].opt_bin/python3
+
+    # Build the Rust binary (build.rs handles rpath for libpython)
+    system "cargo", "install", *std_cargo_args
+
+    # Create the bundled venv at libexec/venv/ — this is where the
+    # binary looks for Python packages (../libexec/venv/ relative to bin/)
+    venv = libexec/"venv"
+    system Formula["python@3.12"].opt_bin/python3, "-m", "venv", venv
+
+    # Determine which TTS backend to install based on platform
+    pip = venv/"bin/pip"
+    if Hardware::CPU.arm? && OS.mac?
+      # Apple Silicon: use mlx-audio for optimized Metal inference
+      system pip, "install", "--no-cache-dir", "mlx-audio"
+    else
+      # CUDA or CPU fallback: use qwen-tts
+      system pip, "install", "--no-cache-dir", "qwen-tts"
+    end
+
+    # Install the bridge module into the venv's site-packages.
+    # The binary also does this at runtime (ensure_bridge_installed),
+    # but pre-installing avoids a first-run write to the Cellar.
+    site_packages = (venv/"lib").glob("python*/site-packages").first
+    cp "chatter_bridge.py", site_packages/"chatter_bridge.py"
+  end
+
+  def caveats
+    <<~EOS
+      After installing, download the TTS models (~12 GB total):
+
+        chatter model download
+
+      Run `chatter doctor` to verify your setup.
+    EOS
+  end
+
+  test do
+    # Verify the binary runs and doctor finds the bundled venv
+    assert_match "Chatter Environment Check", shell_output("#{bin}/chatter doctor 2>&1")
+  end
+end
