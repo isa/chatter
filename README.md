@@ -8,6 +8,7 @@ A Rust CLI tool that wraps [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) to p
 - **Voice Cloning** — Clone a voice from a reference audio sample
 - **Speech Generation** — Generate MP3 audio from text using saved voice profiles
 - **Model Management** — Download, list, and manage Qwen3-TTS model variants
+- **Document Input** — Generate speech from PDF, DOCX, TXT, and Markdown files with automatic text chunking
 - **Environment Doctor** — Validate your setup with `chatter doctor` and auto-fix with `--fix`
 
 ## Installation
@@ -47,6 +48,18 @@ chatter clone reference.mp3
 
 # Generate speech
 chatter generate "Hello, world!" --profile warm-narrator -o output.mp3
+
+# Generate from a document
+chatter generate --file document.pdf --profile warm-narrator -o output.mp3
+
+# Split long documents into separate files per chunk
+chatter generate --file book.md --profile warm-narrator --split
+
+# Adjust speech speed (0.5x to 3.0x)
+chatter generate "Hello, world!" --profile warm-narrator --speed 1.2
+
+# Generate without auto-playing audio
+chatter generate "Hello!" --profile warm-narrator --no-play
 
 # List saved profiles
 chatter profiles list
@@ -153,6 +166,7 @@ src/
   main.rs              # CLI entry point, venv discovery
   cli.rs               # clap argument definitions
   ui.rs                # spinners, doctor output helpers
+  chunk.rs             # text chunking with pause markers
   bridge/
     mod.rs             # re-exports
     venv.rs            # venv discovery, Python configuration
@@ -168,12 +182,19 @@ src/
     profiles.rs        # `chatter profiles list|show|delete`
     model.rs           # `chatter model download|list|remove`
     doctor.rs          # `chatter doctor` — environment check
+  extract/
+    mod.rs             # trait + format dispatch
+    pdf.rs             # PDF text extraction (pdf-extract)
+    docx.rs            # DOCX text extraction
+    markdown.rs        # Markdown to plain text (pulldown-cmark)
+    txt.rs             # Plain text passthrough
   profile/
     mod.rs             # ProfileMetadata, ProfileInfo types
     storage.rs         # TOML-based profile CRUD
   audio/
     mod.rs             # WAV-to-MP3 encoding (mp3lame-encoder)
     playback.rs        # afplay/paplay shell-out
+    time_stretch.rs    # WSOLA time-stretching for --speed flag
 chatter_bridge.py      # Python adapter (embedded at compile time)
 ```
 
