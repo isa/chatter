@@ -116,7 +116,9 @@ pub fn download_model(quant: &ModelQuantization) -> Result<(), BridgeError> {
         let hf_hub = import_hf_hub(py)?;
         let snapshot_download = hf_hub.getattr("snapshot_download")?;
 
-        for repo_id in &variants {
+        for (i, repo_id) in variants.iter().enumerate() {
+            let short_name = repo_id.rsplit('/').next().unwrap_or(repo_id);
+            eprintln!("[{}/{}] {short_name}", i + 1, variants.len());
             snapshot_download.call1((repo_id.as_str(),))?;
         }
 

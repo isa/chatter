@@ -53,16 +53,16 @@ pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
             let quant = ModelQuantization::from(variant);
             let suffix = quant.mlx_suffix();
 
-            println!("Downloading Qwen3-TTS {label} ({suffix}) models (VoiceDesign, CustomVoice, Base)...");
-
-            let spinner = create_spinner(&format!("Downloading Qwen3-TTS {label} ({suffix})"));
+            // No spinner here — HuggingFace's snapshot_download shows its own
+            // tqdm progress bars for file counts and byte-level download progress.
+            // A concurrent spinner would fight over stderr and cause flickering.
+            eprintln!("Downloading Qwen3-TTS {label} ({suffix}) models (VoiceDesign, CustomVoice, Base)...\n");
 
             match bridge::model::download_model(&quant) {
                 Ok(()) => {
-                    spinner.finish_with_message(format!("Qwen3-TTS {label} download complete"));
+                    eprintln!("\nQwen3-TTS {label} ({suffix}) download complete.");
                 }
                 Err(e) => {
-                    spinner.abandon_with_message(format!("Qwen3-TTS {label} download failed"));
                     let err = anyhow::Error::from(e).context("Model download failed");
                     print_error(&err, global.verbose);
                     return Err(err);
