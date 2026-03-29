@@ -51,6 +51,28 @@ pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
         ModelCommands::Download { variant } => {
             match global.engine {
                 Engine::Chatterbox => {
+                    // Disk space pre-check for ChatterBox downloads (D-02)
+                    match bridge::model::disk_space_check() {
+                        Ok((free, estimated)) => {
+                            eprintln!("Estimated download size: {}", format_bytes(estimated));
+                            eprintln!("Available disk space:    {}", format_bytes(free));
+                            if free < estimated + 5_000_000_000 {
+                                eprintln!(
+                                    "{} Less than 5 GB will remain after download.",
+                                    "Warning:".if_supports_color(Stderr, |t| t.yellow()),
+                                );
+                            }
+                            eprintln!();
+                        }
+                        Err(_) => {
+                            eprintln!(
+                                "{} Could not check disk space, proceeding anyway...",
+                                "Warning:".if_supports_color(Stderr, |t| t.yellow()),
+                            );
+                            eprintln!();
+                        }
+                    }
+
                     eprintln!("Installing ChatterBox dependencies and downloading models...\n");
 
                     if let Err(e) = bridge::venv::install_chatterbox_deps() {
@@ -103,21 +125,60 @@ pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
             if models.is_empty() {
                 println!("No models downloaded. Run `chatter model download` to get started.");
             } else {
+                let qwen_models: Vec<_> = models.iter().filter(|m| m.engine == "qwen").collect();
+                let cb_models: Vec<_> = models.iter().filter(|m| m.engine == "chatterbox").collect();
+
+                // Qwen section
                 println!(
-                    "{:<50} {:>10} {}",
-                    "Model".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
-                    "Size".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
-                    "Path".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                    "{}",
+                    "Qwen3-TTS Models".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
                 );
                 println!("{}", "-".repeat(80));
+                if qwen_models.is_empty() {
+                    println!("(none downloaded)");
+                } else {
+                    println!(
+                        "{:<50} {:>10} {}",
+                        "Model".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                        "Size".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                        "Path".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                    );
+                    for model in &qwen_models {
+                        let size_str = match model.size_bytes {
+                            Some(bytes) => format_bytes(bytes),
+                            None => "-".to_string(),
+                        };
+                        let path_str = model.local_path.as_deref().unwrap_or("-");
+                        println!("{:<50} {:>10} {}", model.repo_id, size_str, path_str);
+                    }
+                }
 
-                for model in &models {
-                    let size_str = match model.size_bytes {
-                        Some(bytes) => format_bytes(bytes),
-                        None => "-".to_string(),
-                    };
-                    let path_str = model.local_path.as_deref().unwrap_or("-");
-                    println!("{:<50} {:>10} {}", model.repo_id, size_str, path_str);
+                // ChatterBox section
+                println!();
+                println!(
+                    "{}",
+                    "ChatterBox Models".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                );
+                println!("{}", "-".repeat(80));
+                if cb_models.is_empty() {
+                    println!("(none downloaded)");
+                } else {
+                    println!(
+                        "{:<14} {:<40} {:>10} {}",
+                        "Variant".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                        "Model".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                        "Size".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                        "Path".if_supports_color(owo_colors::Stream::Stdout, |t| t.bold()),
+                    );
+                    for model in &cb_models {
+                        let size_str = match model.size_bytes {
+                            Some(bytes) => format_bytes(bytes),
+                            None => "-".to_string(),
+                        };
+                        let path_str = model.local_path.as_deref().unwrap_or("-");
+                        let variant = model.variant_label.as_deref().unwrap_or(&model.repo_id);
+                        println!("{:<14} {:<40} {:>10} {}", variant, model.repo_id, size_str, path_str);
+                    }
                 }
             }
         }
