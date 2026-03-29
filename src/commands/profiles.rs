@@ -27,12 +27,14 @@ fn run_list(_global: &GlobalArgs) -> anyhow::Result<()> {
     // Calculate column widths
     let mut name_w = 20usize;
     let mut type_w = 9usize;
+    let mut engine_w = 10usize;
     let mut lang_w = 10usize;
     let created_w = 10usize;
 
     for p in &profiles {
         name_w = name_w.max(p.profile.name.len());
         type_w = type_w.max(p.profile.profile_type.to_string().len());
+        engine_w = engine_w.max(p.profile.engine.len());
         lang_w = lang_w.max(p.profile.language.len());
     }
 
@@ -42,13 +44,15 @@ fn run_list(_global: &GlobalArgs) -> anyhow::Result<()> {
 
     // Header
     println!(
-        "{:<name_w$}  {:<type_w$}  {:<lang_w$}  {:<created_w$}",
+        "{:<name_w$}  {:<type_w$}  {:<engine_w$}  {:<lang_w$}  {:<created_w$}",
         "Name".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
         "Type".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
+        "Engine".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
         "Language".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
         "Created".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
         name_w = name_w,
         type_w = type_w,
+        engine_w = engine_w,
         lang_w = lang_w,
         created_w = created_w,
     );
@@ -62,17 +66,21 @@ fn run_list(_global: &GlobalArgs) -> anyhow::Result<()> {
         let type_dim = p.profile.profile_type.to_string()
             .if_supports_color(Stream::Stdout, |t| t.style(dim_style))
             .to_string();
+        let engine_dim = p.profile.engine
+            .if_supports_color(Stream::Stdout, |t| t.style(dim_style))
+            .to_string();
         let lang_dim = p.profile.language
             .if_supports_color(Stream::Stdout, |t| t.style(dim_style))
             .to_string();
         // Pad manually since ANSI codes break format width
         let name_pad = name_w.saturating_sub(p.profile.name.len());
         let type_pad = type_w.saturating_sub(p.profile.profile_type.to_string().len());
+        let engine_pad = engine_w.saturating_sub(p.profile.engine.len());
         let lang_pad = lang_w.saturating_sub(p.profile.language.len());
         println!(
-            "{}{:pad_n$}  {}{:pad_t$}  {}{:pad_l$}  {}",
-            name_colored, "", type_dim, "", lang_dim, "", created_short,
-            pad_n = name_pad, pad_t = type_pad, pad_l = lang_pad,
+            "{}{:pad_n$}  {}{:pad_t$}  {}{:pad_e$}  {}{:pad_l$}  {}",
+            name_colored, "", type_dim, "", engine_dim, "", lang_dim, "", created_short,
+            pad_n = name_pad, pad_t = type_pad, pad_e = engine_pad, pad_l = lang_pad,
         );
     }
 
@@ -102,6 +110,7 @@ fn run_show(name: &str, global: &GlobalArgs) -> anyhow::Result<()> {
         profile.profile.name
     );
     println!("Type: {}", profile.profile.profile_type);
+    println!("Engine: {}", profile.profile.engine);
     println!("Language: {}", profile.profile.language);
 
     if let Some(ref desc) = profile.profile.description {

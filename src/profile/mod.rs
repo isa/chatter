@@ -18,6 +18,14 @@ pub struct ProfileInfo {
     pub source_audio: Option<String>,
     pub created: String, // ISO 8601 via chrono
     pub model_variant: String,
+    /// TTS engine used to create this profile ("qwen" or "chatterbox").
+    /// Defaults to "qwen" for backward compatibility with older profiles.
+    #[serde(default = "default_engine")]
+    pub engine: String,
+}
+
+fn default_engine() -> String {
+    "qwen".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

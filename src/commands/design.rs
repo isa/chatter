@@ -6,7 +6,7 @@ use dialoguer::{Input, Select};
 use crate::audio;
 use crate::bridge::inference;
 use crate::bridge::model::ModelQuantization;
-use crate::cli::{DesignArgs, GlobalArgs, Language};
+use crate::cli::{DesignArgs, Engine, GlobalArgs, Language};
 use crate::profile::storage::{self, PREVIEW_SENTENCE};
 use crate::profile::{AudioInfo, ProfileInfo, ProfileMetadata, ProfileType};
 use crate::ui;
@@ -29,6 +29,13 @@ fn language_to_str(lang: &Language) -> &'static str {
 }
 
 pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
+    // ChatterBox does not support voice design
+    if global.engine == Engine::Chatterbox {
+        anyhow::bail!(
+            "ChatterBox does not support voice design. Use `chatter clone --engine chatterbox` instead."
+        );
+    }
+
     let language_str = language_to_str(&global.language);
     let quant_override = args.variant.map(ModelQuantization::from);
     let mut description = args.description.clone();
@@ -196,6 +203,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             source_audio: None,
             created: chrono::Utc::now().to_rfc3339(),
             model_variant,
+            engine: "qwen".to_string(),
         },
         audio: AudioInfo {
             sample_text: PREVIEW_SENTENCE.to_string(),

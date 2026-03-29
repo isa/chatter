@@ -9,7 +9,7 @@ use owo_colors::Style;
 use crate::audio;
 use crate::bridge::inference as bridge;
 use crate::bridge::model::ModelQuantization;
-use crate::cli::{CloneArgs, GlobalArgs, Language};
+use crate::cli::{CloneArgs, Engine, GlobalArgs, Language};
 use crate::profile::storage::{self, PREVIEW_SENTENCE};
 use crate::profile::{AudioInfo, ProfileInfo, ProfileMetadata, ProfileType};
 use crate::ui;
@@ -199,6 +199,7 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             source_audio: Some(source_audio.clone()),
             created: Utc::now().to_rfc3339(),
             model_variant,
+            engine: global.engine.as_str().to_string(),
         },
         audio: AudioInfo {
             sample_text: PREVIEW_SENTENCE.to_string(),
