@@ -218,6 +218,11 @@ def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, r
                 ref_audio=ref_audio_path, ref_text=ref_text,
                 temperature=temperature, repetition_penalty=repetition_penalty,
             ))
+            if not results or not hasattr(results[0], 'audio'):
+                raise ValueError(
+                    f"Model returned no audio for text ({len(text)} chars). "
+                    "Text may be too long for a single chunk."
+                )
             audio = np.array(results[0].audio, dtype=np.float32)
             return audio.tolist(), 24000
         else:

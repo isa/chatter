@@ -19,15 +19,22 @@ pub fn create_spinner(message: &str) -> ProgressBar {
     pb
 }
 
-/// Create a bounded progress bar for chunk synthesis per D-12.
+/// Create a bounded progress bar for chunk synthesis.
+///
+/// Uses unicode block elements for a smooth gradient fill:
+/// ━ (full), ╸ (half/head), ┄ (empty)
 pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
     let pb = ProgressBar::new(total);
     pb.set_style(
         ProgressStyle::with_template(
-            "{spinner:.cyan} {msg} ({pos}/{len}) [{bar:30}] ({elapsed})",
+            "{spinner:.cyan} {msg} {pos:.green}/{len} {bar:30.cyan/dim} {percent:>3}% ({elapsed:.dim})",
         )
         .expect("valid template")
-        .progress_chars("=>-"),
+        .tick_strings(&[
+            "\u{280B}", "\u{2819}", "\u{2839}", "\u{2838}", "\u{283C}", "\u{2834}",
+            "\u{2826}", "\u{2827}", "\u{2807}", "\u{280F}",
+        ])
+        .progress_chars("\u{2501}\u{2578}\u{2504}"),
     );
     pb.set_message(message.to_string());
     pb.enable_steady_tick(Duration::from_millis(100));

@@ -3,6 +3,7 @@ use std::path::Path;
 use mp3lame_encoder::{Builder, FlushNoGap, MonoPcm};
 
 pub mod playback;
+mod time_stretch;
 
 /// Convert float32 samples ([-1.0, 1.0]) to i16 PCM.
 pub fn samples_f32_to_i16(samples: &[f32]) -> Vec<i16> {
@@ -43,4 +44,10 @@ pub fn encode_wav_to_mp3(
 
     std::fs::write(output_path, &output)?;
     Ok(())
+}
+
+/// Time-stretch audio: change speed without changing pitch (WSOLA algorithm).
+/// `speed` > 1.0 = faster, < 1.0 = slower. Returns stretched samples at the same sample rate.
+pub fn time_stretch(samples: &[f32], speed: f32) -> Vec<f32> {
+    time_stretch::wsola(samples, speed)
 }

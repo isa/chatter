@@ -120,13 +120,9 @@ pub struct GenerateArgs {
     #[arg(long)]
     pub split: bool,
 
-    /// Slower, more deliberate speech with longer pauses at punctuation
-    #[arg(long)]
-    pub slow: bool,
-
-    /// Preprocess text: insert pause markers at punctuation for more natural pacing
-    #[arg(long)]
-    pub natural_pace: bool,
+    /// Speed multiplier for generated audio (default: 1.0, e.g. --speed 1.5 for faster)
+    #[arg(long, default_value_t = 1.0)]
+    pub speed: f32,
 }
 
 /// Profile management subcommands.

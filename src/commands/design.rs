@@ -73,10 +73,9 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         audio::encode_wav_to_mp3(&pcm, sr, &temp_mp3)
             .context("Failed to encode preview audio")?;
 
-        let play_spinner = ui::create_spinner("Playing preview...");
-        audio::playback::play_audio(&temp_mp3)
+        eprintln!("\u{1F50A} Playing preview... (press Enter to skip)");
+        audio::playback::play_audio_skippable(&temp_mp3)
             .context("Failed to play preview audio")?;
-        ui::finish_spinner(&play_spinner, "Preview played");
         let _ = fs::remove_file(&temp_mp3);
 
         // Interactive menu
