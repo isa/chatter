@@ -172,6 +172,45 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
     })
 }
 
+/// List all ChatterBox models in the local HuggingFace cache.
+///
+/// Scans the HF cache directory and filters for repos matching
+/// the `ResembleAI/chatterbox` or `mlx-community/chatterbox` prefix.
+pub fn list_cached_chatterbox_models() -> Result<Vec<ModelInfo>, BridgeError> {
+    Python::attach(|py| {
+        let hf_hub = import_hf_hub(py)?;
+
+        let cache_info = hf_hub.call_method0("scan_cache_dir")?;
+        let repos = cache_info.getattr("repos")?;
+        let repos_iter = PyIterator::from_object(&repos)?;
+
+        let mut models = Vec::new();
+
+        for repo in repos_iter {
+            let repo: Bound<'_, PyAny> = repo?;
+            let repo_id: String = repo.getattr("repo_id")?.extract()?;
+
+            if !repo_id.starts_with("ResembleAI/chatterbox")
+                && !repo_id.starts_with("mlx-community/chatterbox")
+            {
+                continue;
+            }
+
+            let size_on_disk: u64 = repo.getattr("size_on_disk")?.extract()?;
+            let repo_path: String = repo.getattr("repo_path")?.str()?.extract()?;
+
+            models.push(ModelInfo {
+                repo_id,
+                size_label: "ChatterBox".to_string(),
+                local_path: Some(repo_path),
+                size_bytes: Some(size_on_disk),
+            });
+        }
+
+        Ok(models)
+    })
+}
+
 /// Remove all cached 1.7B model variants.
 ///
 /// Detects the compute backend to determine which variant repos to remove.
