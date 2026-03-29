@@ -18,6 +18,9 @@ pub enum VenvDiagnosis {
     BridgeMissing { venv_path: PathBuf },
 }
 
+/// Curated ChatterBox dependencies, embedded at compile time.
+const CHATTERBOX_REQUIREMENTS: &str = include_str!("../../requirements/chatterbox.txt");
+
 /// The chatter_bridge package sources, embedded at compile time.
 const BRIDGE_INIT: &str = include_str!("../../chatter_bridge/__init__.py");
 const BRIDGE_ENGINES_INIT: &str = include_str!("../../chatter_bridge/engines/__init__.py");
@@ -203,6 +206,97 @@ pub fn ensure_bridge_installed() -> Result<(), BridgeError> {
 /// Get the path to the Python binary inside the venv.
 fn venv_python_path(venv: &std::path::Path) -> PathBuf {
     venv.join("bin").join("python")
+}
+
+/// Install ChatterBox TTS dependencies into the managed venv.
+///
+/// Uses `pip install --no-deps` for chatterbox-tts itself (to avoid pulling in
+/// gradio and resemble-perth), then installs the curated dependency list.
+/// On Apple Silicon, also installs `mlx-audio` for MLX backend support.
+pub fn install_chatterbox_deps() -> Result<(), BridgeError> {
+    let venv = venv_path()?;
+    let pip = venv_python_path(&venv);
+
+    // Step 1: Install chatterbox-tts with --no-deps
+    let output = Command::new(&pip)
+        .args(["-m", "pip", "install", "--no-deps", "chatterbox-tts==0.1.7"])
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| BridgeError::Other(format!("Failed to run pip: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(BridgeError::Other(format!(
+            "Failed to install chatterbox-tts: {stderr}"
+        )));
+    }
+
+    // Step 2: Write curated requirements to a temp file and install
+    let temp_dir = std::env::temp_dir();
+    let req_file = temp_dir.join("chatter-cb-requirements.txt");
+    std::fs::write(&req_file, CHATTERBOX_REQUIREMENTS).map_err(|e| {
+        BridgeError::Other(format!("Failed to write temp requirements file: {e}"))
+    })?;
+
+    let output = Command::new(&pip)
+        .args([
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            &req_file.to_string_lossy(),
+        ])
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| BridgeError::Other(format!("Failed to run pip: {e}")))?;
+
+    // Clean up temp file regardless of result
+    let _ = std::fs::remove_file(&req_file);
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(BridgeError::Other(format!(
+            "Failed to install ChatterBox dependencies: {stderr}"
+        )));
+    }
+
+    // Step 3: On Apple Silicon macOS, install mlx-audio for MLX backend
+    if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        let output = Command::new(&pip)
+            .args(["-m", "pip", "install", "mlx-audio>=0.2.8"])
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| BridgeError::Other(format!("Failed to run pip: {e}")))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(BridgeError::Other(format!(
+                "Failed to install mlx-audio: {stderr}"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if ChatterBox TTS is installed in the managed venv.
+pub fn is_chatterbox_installed() -> bool {
+    let Ok(venv) = venv_path() else {
+        return false;
+    };
+    let python = venv_python_path(&venv);
+    if !python.exists() {
+        return false;
+    }
+    let output = Command::new(&python)
+        .args(["-c", "import chatterbox"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+    matches!(output, Ok(o) if o.status.success())
 }
 
 /// Configure the Python runtime to use the venv's packages.
