@@ -204,6 +204,14 @@ pub struct GenerateArgs {
     /// ChatterBox model variant (original, turbo, multilingual)
     #[arg(long, value_enum)]
     pub cb_variant: Option<ChatterBoxVariant>,
+
+    /// Exaggeration level for ChatterBox Original (0.0-1.0, default: 0.5)
+    #[arg(long)]
+    pub exaggeration: Option<f64>,
+
+    /// Classifier-free guidance weight for ChatterBox Original
+    #[arg(long)]
+    pub cfg: Option<f64>,
 }
 
 /// Profile management subcommands.

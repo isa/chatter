@@ -176,7 +176,7 @@ def load_clone_prompt(path):
     return torch.load(path, map_location=device)
 
 
-def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2):
+def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2, exaggeration=0.5, cfg_weight=0.5):
     """Generate speech from text using a saved profile.
     profile_dir should contain either voice_prompt.bin (CUDA/MPS) or ref_audio.wav (MLX).
     ref_text is the transcript of ref_audio.wav (needed for MLX voice cloning).

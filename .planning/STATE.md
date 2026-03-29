@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: ChatterBox Engine Support
-status: planning
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-03-29T21:47:01.466Z"
-last_activity: 2026-03-29 -- Roadmap created for v1.1 milestone
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-29T22:16:17.265Z"
+last_activity: 2026-03-29
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 6
-  completed_plans: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 1
   percent: 33
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-29)
 
 **Core value:** Users can create reusable voice profiles and generate high-quality speech from text or documents without leaving the command line.
-**Current focus:** v1.1 ChatterBox Engine Support -- Phase 04 (Engine Abstraction)
+**Current focus:** Phase 08 — ChatterBox Controls
 
 ## Current Position
 
-Phase: 04 of 08 (Engine Abstraction)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-29 -- Roadmap created for v1.1 milestone
+Phase: 08 (ChatterBox Controls) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-03-29
 
 Progress: [███░░░░░░░] 33%
 
@@ -51,6 +51,7 @@ Progress: [███░░░░░░░] 33%
 - No data yet for v1.1
 
 | Phase 07 P01 | 3min | 2 tasks | 2 files |
+| Phase 08 P01 | 3min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,7 @@ Progress: [███░░░░░░░] 33%
 - [v1.1 Planning]: 5-phase structure derived from research -- abstraction first, then CLI, then inference, then management, then features
 - [v1.1 Planning]: Phase 07 and 08 are independent of each other (both depend on 06)
 - [Phase 07]: Hardcoded 20GB estimate for ChatterBox download size; disk_space_check failure is non-blocking
+- [Phase 08]: Qwen engine generate_speech accepts exaggeration/cfg_weight params for positional arg compatibility with dispatcher
 
 ### Pending Todos
 
@@ -72,6 +74,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T21:47:01.457Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-03-29T22:16:17.258Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None

@@ -112,6 +112,8 @@ pub fn generate_speech(
     ref_text: &str,
     slow: bool,
     quant_override: Option<ModelQuantization>,
+    exaggeration: f64,
+    cfg_weight: f64,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
     let quant = resolve_quantization(quant_override)?;
     configure_mlx_quantization(&quant)?;
@@ -122,7 +124,7 @@ pub fn generate_speech(
         let result = bridge.call_method1(
             "generate_speech",
             (text, language, profile_dir.to_string_lossy().as_ref(), ref_text,
-             temperature, repetition_penalty),
+             temperature, repetition_penalty, exaggeration, cfg_weight),
         )?;
         let wav: Vec<f32> = result.get_item(0)?.extract()?;
         let sr: u32 = result.get_item(1)?.extract()?;

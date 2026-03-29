@@ -89,8 +89,10 @@ Plans:
   2. User can pass `--cfg` to control classifier-free guidance weight for ChatterBox Original
   3. User can include `[laugh]` or `[sigh]` tags in text input for ChatterBox Turbo and the generated audio contains the corresponding non-speech sound
   4. Invalid paralinguistic tags produce a clear validation error before inference starts, not a cryptic Python traceback
-**Plans**: TBD
-**UI hint**: no
+**Plans**: 2 plans
+Plans:
+- [ ] 08-01-PLAN.md -- Wire exaggeration and CFG weight parameters through Python and Rust bridge
+- [ ] 08-02-PLAN.md -- Engine-specific flag gating and paralinguistic tag validation
 
 ## Progress
 
@@ -104,4 +106,4 @@ Note: Phase 07 and Phase 08 both depend on Phase 06 but are independent of each 
 | 05. CLI Engine Routing | v1.1 | 0/1 | Planning complete | - |
 | 06. ChatterBox Inference | v1.1 | 2/2 | Complete | 2026-03-29 |
 | 07. Model Management and Diagnostics | v1.1 | 1/2 | In Progress|  |
-| 08. ChatterBox Controls | v1.1 | 0/TBD | Not started | - |
+| 08. ChatterBox Controls | v1.1 | 0/2 | Planning complete | - |

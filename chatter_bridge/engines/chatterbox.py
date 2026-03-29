@@ -213,7 +213,7 @@ def load_clone_prompt(path):
     return None
 
 
-def _generate_with_model(model, backend, text, language, ref_audio_path):
+def _generate_with_model(model, backend, text, language, ref_audio_path, exaggeration=0.5, cfg_weight=0.5):
     """Shared generation logic for both generate_speech and voice_clone_from_audio.
 
     Returns (list_of_floats, sample_rate).
@@ -236,8 +236,8 @@ def _generate_with_model(model, backend, text, language, ref_audio_path):
                 wav = model.generate(
                     text=text,
                     audio_prompt_path=ref_audio_path,
-                    exaggeration=0.5,
-                    cfg_weight=0.5,
+                    exaggeration=exaggeration,
+                    cfg_weight=cfg_weight,
                 )
             else:
                 # Turbo variant
@@ -249,12 +249,13 @@ def _generate_with_model(model, backend, text, language, ref_audio_path):
             return audio.tolist(), 24000
 
 
-def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2):
+def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2, exaggeration=0.5, cfg_weight=0.5):
     """Generate speech from text using a saved ChatterBox voice profile.
 
     The profile_dir must contain ref_audio.wav (the reference audio for voice cloning).
     temperature and repetition_penalty are accepted for API compatibility but not
     used by ChatterBox (its generation params are variant-specific).
+    exaggeration and cfg_weight are used by ChatterBox Original variant only.
 
     Returns (list_of_floats, sample_rate).
     """
@@ -266,7 +267,7 @@ def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, r
         raise FileNotFoundError(f"Reference audio not found: {ref_audio_path}")
 
     model = load_base_model()
-    return _generate_with_model(model, backend, text, language, ref_audio_path)
+    return _generate_with_model(model, backend, text, language, ref_audio_path, exaggeration=exaggeration, cfg_weight=cfg_weight)
 
 
 def voice_clone_from_audio(ref_audio_path, text, language):
