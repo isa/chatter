@@ -36,44 +36,43 @@ fn run_list(_global: &GlobalArgs) -> anyhow::Result<()> {
         lang_w = lang_w.max(p.profile.language.len());
     }
 
+    let header_style = Style::new().bold().underline();
+    let name_style = Style::new().cyan();
+    let dim_style = Style::new().dimmed();
+
     // Header
     println!(
         "{:<name_w$}  {:<type_w$}  {:<lang_w$}  {:<created_w$}",
-        "Name", "Type", "Language", "Created",
+        "Name".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
+        "Type".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
+        "Language".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
+        "Created".if_supports_color(Stream::Stdout, |t| t.style(header_style)),
         name_w = name_w,
         type_w = type_w,
         lang_w = lang_w,
         created_w = created_w,
-    );
-
-    // Separator line
-    let separator = format!(
-        "{:\u{2500}<name_w$}  {:\u{2500}<type_w$}  {:\u{2500}<lang_w$}  {:\u{2500}<created_w$}",
-        "", "", "", "",
-        name_w = name_w,
-        type_w = type_w,
-        lang_w = lang_w,
-        created_w = created_w,
-    );
-    let dim_style = Style::new().dimmed();
-    println!(
-        "{}",
-        separator.if_supports_color(Stream::Stdout, |t| t.style(dim_style))
     );
 
     // Rows
     for p in &profiles {
         let created_short = format_date(&p.profile.created);
+        let name_colored = p.profile.name
+            .if_supports_color(Stream::Stdout, |t| t.style(name_style))
+            .to_string();
+        let type_dim = p.profile.profile_type.to_string()
+            .if_supports_color(Stream::Stdout, |t| t.style(dim_style))
+            .to_string();
+        let lang_dim = p.profile.language
+            .if_supports_color(Stream::Stdout, |t| t.style(dim_style))
+            .to_string();
+        // Pad manually since ANSI codes break format width
+        let name_pad = name_w.saturating_sub(p.profile.name.len());
+        let type_pad = type_w.saturating_sub(p.profile.profile_type.to_string().len());
+        let lang_pad = lang_w.saturating_sub(p.profile.language.len());
         println!(
-            "{:<name_w$}  {:<type_w$}  {:<lang_w$}  {:<created_w$}",
-            p.profile.name,
-            p.profile.profile_type,
-            p.profile.language,
-            created_short,
-            name_w = name_w,
-            type_w = type_w,
-            lang_w = lang_w,
-            created_w = created_w,
+            "{}{:pad_n$}  {}{:pad_t$}  {}{:pad_l$}  {}",
+            name_colored, "", type_dim, "", lang_dim, "", created_short,
+            pad_n = name_pad, pad_t = type_pad, pad_l = lang_pad,
         );
     }
 
