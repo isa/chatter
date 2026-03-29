@@ -9,6 +9,7 @@ use crate::bridge::inference;
 use crate::bridge::model::ModelQuantization;
 use crate::chunk;
 use crate::cli::{Engine, GenerateArgs, GlobalArgs, Language};
+use crate::commands::validate;
 use crate::extract;
 use crate::profile::storage;
 use crate::ui;
@@ -243,6 +244,15 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let speed = args.speed;
     if speed < 0.5 || speed > 3.0 {
         anyhow::bail!("--speed must be between 0.5 and 3.0 (got {speed})");
+    }
+
+    // Validate paralinguistic tags for ChatterBox Turbo (D-04, D-06)
+    if (global.engine == Engine::Chatterbox || profile.profile.engine == "chatterbox")
+        && effective_variant == "turbo"
+    {
+        // Validate against the original text (before chunking) so all tags are checked
+        validate::validate_paralinguistic_tags(&text)
+            .map_err(|e| anyhow::anyhow!(e))?;
     }
 
     // 7. Load model with spinner (all Python output is suppressed)
