@@ -6,8 +6,8 @@ use owo_colors::OwoColorize;
 use owo_colors::Stream::Stderr;
 
 use crate::bridge;
-use crate::bridge::model::size_label;
-use crate::cli::{GlobalArgs, ModelCommands};
+use crate::bridge::model::{size_label, ModelQuantization};
+use crate::cli::{GlobalArgs, ModelCommands, ModelVariant};
 
 /// Create a spinner with the standard chatter style.
 ///
@@ -48,14 +48,19 @@ fn print_error(err: &anyhow::Error, verbose: bool) {
 
 pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
     match command {
-        ModelCommands::Download => {
+        ModelCommands::Download { variant } => {
             let label = size_label();
+            let quant = match variant {
+                ModelVariant::Bf16 => ModelQuantization::Bf16,
+                ModelVariant::EightBit => ModelQuantization::EightBit,
+            };
+            let quant_label = quant.label();
 
-            println!("Downloading Qwen3-TTS {label} models (VoiceDesign, CustomVoice, Base)...");
+            println!("Downloading Qwen3-TTS {label} ({quant_label}) models (VoiceDesign, CustomVoice, Base)...");
 
-            let spinner = create_spinner(&format!("Downloading Qwen3-TTS {label}"));
+            let spinner = create_spinner(&format!("Downloading Qwen3-TTS {label} ({quant_label})"));
 
-            match bridge::model::download_model() {
+            match bridge::model::download_model(quant) {
                 Ok(()) => {
                     spinner.finish_with_message(format!("Qwen3-TTS {label} download complete"));
                 }

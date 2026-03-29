@@ -153,11 +153,26 @@ pub struct DoctorArgs {
     pub fix: bool,
 }
 
+/// Model quantization variants for download.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelVariant {
+    /// BFloat16 precision (default, higher quality)
+    #[value(name = "bf16")]
+    Bf16,
+    /// 8-bit quantized (smaller, ~50% less disk/memory)
+    #[value(name = "8bit")]
+    EightBit,
+}
+
 /// Model management subcommands.
 #[derive(Subcommand, Debug)]
 pub enum ModelCommands {
     /// Download all 1.7B model variants
-    Download,
+    Download {
+        /// Model quantization variant (bf16 or 8bit, MLX only)
+        #[arg(long, default_value = "bf16")]
+        variant: ModelVariant,
+    },
     /// List downloaded models and their disk usage
     List,
     /// Remove all downloaded 1.7B model variants

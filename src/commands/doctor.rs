@@ -140,8 +140,16 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
                 let cached_ids: HashSet<String> =
                     cached_models.iter().map(|m| m.repo_id.clone()).collect();
 
+                // Detect quantization variant for display
+                let quant_label = info.backend.as_ref()
+                    .and_then(|b| bridge::detect_cached_quantization(b).ok())
+                    .map(|q| q.label())
+                    .unwrap_or("bf16");
+
                 if let Some(backend) = &info.backend {
-                    let expected = model::model_variants(backend);
+                    let quant = bridge::detect_cached_quantization(backend)
+                        .unwrap_or(bridge::ModelQuantization::Bf16);
+                    let expected = model::model_variants(backend, quant);
                     let mut present: Vec<&String> = Vec::new();
                     let mut missing: Vec<&String> = Vec::new();
 
@@ -164,7 +172,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
                         ui::doctor_pass(
                             "Models",
                             &format!(
-                                "{}/{} for active backend ({total_gb:.1} GB)",
+                                "{}/{} for active backend, {quant_label} ({total_gb:.1} GB)",
                                 present.len(),
                                 expected.len()
                             ),
@@ -184,7 +192,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
                         ui::doctor_warn(
                             "Models",
                             &format!(
-                                "{}/{} for active backend — missing: {}",
+                                "{}/{} for active backend ({quant_label}) — missing: {}",
                                 present.len(),
                                 expected.len(),
                                 missing_names.join(", ")
@@ -303,7 +311,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         println!();
         println!("Downloading models...");
         let spinner = ui::create_spinner("Downloading Qwen3-TTS 1.7B models");
-        match bridge::download_model() {
+        match bridge::download_model(bridge::ModelQuantization::Bf16) {
             Ok(()) => {
                 spinner.finish_with_message("Models downloaded");
                 println!();

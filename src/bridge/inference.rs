@@ -4,15 +4,24 @@ use pyo3::prelude::*;
 
 use super::error::BridgeError;
 
+/// Detect the current quantization variant from cache.
+/// Returns "bf16" or "8bit" as a string suitable for passing to Python.
+fn current_quantization() -> Result<String, BridgeError> {
+    let backend = super::runtime::detect_backend()?;
+    let quant = super::model::detect_cached_quantization(&backend)?;
+    Ok(quant.mlx_suffix().to_string())
+}
+
 /// Run voice design inference. Returns (audio_samples_f32, sample_rate).
 pub fn voice_design(
     text: &str,
     language: &str,
     instruct: &str,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
+    let quant_str = current_quantization()?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
-        let result = bridge.call_method1("voice_design", (text, language, instruct))?;
+        let result = bridge.call_method1("voice_design", (text, language, instruct, quant_str.as_str()))?;
         let wav: Vec<f32> = result.get_item(0)?.extract()?;
         let sr: u32 = result.get_item(1)?.extract()?;
         Ok((wav, sr))
@@ -70,12 +79,13 @@ pub fn generate_speech(
 ) -> Result<(Vec<f32>, u32), BridgeError> {
     let temperature: f64 = if slow { 0.5 } else { 0.7 };
     let repetition_penalty: f64 = if slow { 1.4 } else { 1.2 };
+    let quant_str = current_quantization()?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let result = bridge.call_method1(
             "generate_speech",
             (text, language, profile_dir.to_string_lossy().as_ref(), ref_text,
-             temperature, repetition_penalty),
+             temperature, repetition_penalty, quant_str.as_str()),
         )?;
         let wav: Vec<f32> = result.get_item(0)?.extract()?;
         let sr: u32 = result.get_item(1)?.extract()?;
@@ -90,11 +100,12 @@ pub fn voice_clone_from_audio(
     text: &str,
     language: &str,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
+    let quant_str = current_quantization()?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let result = bridge.call_method1(
             "voice_clone_from_audio",
-            (ref_audio_path.to_string_lossy().as_ref(), text, language),
+            (ref_audio_path.to_string_lossy().as_ref(), text, language, quant_str.as_str()),
         )?;
         let wav: Vec<f32> = result.get_item(0)?.extract()?;
         let sr: u32 = result.get_item(1)?.extract()?;
@@ -105,9 +116,10 @@ pub fn voice_clone_from_audio(
 /// Ensure a model is loaded, returning whether it was already cached.
 /// model_type: "design", "base", or "custom"
 pub fn ensure_model_loaded(model_type: &str) -> Result<bool, BridgeError> {
+    let quant_str = current_quantization()?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
-        let was_loaded: bool = bridge.call_method1("ensure_model", (model_type,))?.extract()?;
+        let was_loaded: bool = bridge.call_method1("ensure_model", (model_type, quant_str.as_str()))?.extract()?;
         Ok(was_loaded)
     })
 }
