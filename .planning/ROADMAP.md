@@ -75,7 +75,10 @@ Plans:
   1. `chatter model list` shows both Qwen3-TTS and ChatterBox cached models with their sizes
   2. `chatter model download --engine chatterbox` downloads ChatterBox model variants (Original, Turbo, Multilingual) and shows disk space required before starting
   3. `chatter doctor` validates ChatterBox installation status (package installed, compatible hardware detected, sufficient disk space) alongside existing Qwen3-TTS checks
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 07-01-PLAN.md -- Engine-grouped model listing and disk space pre-check for ChatterBox downloads
+- [ ] 07-02-PLAN.md -- Extend doctor command with ChatterBox diagnostics and --fix support
 
 ### Phase 08: ChatterBox Controls
 **Goal**: Users can leverage ChatterBox-specific audio generation features not available in Qwen3-TTS
@@ -100,5 +103,5 @@ Note: Phase 07 and Phase 08 both depend on Phase 06 but are independent of each 
 | 04. Engine Abstraction | v1.1 | 0/1 | Planning complete | - |
 | 05. CLI Engine Routing | v1.1 | 0/1 | Planning complete | - |
 | 06. ChatterBox Inference | v1.1 | 2/2 | Complete | 2026-03-29 |
-| 07. Model Management and Diagnostics | v1.1 | 0/TBD | Not started | - |
+| 07. Model Management and Diagnostics | v1.1 | 0/2 | Planning complete | - |
 | 08. ChatterBox Controls | v1.1 | 0/TBD | Not started | - |
