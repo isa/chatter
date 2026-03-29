@@ -56,5 +56,5 @@
 | MDL-01 | Phase 07 | Done |
 | MDL-02 | Phase 07 | Done |
 | MDL-03 | Phase 07 | Done |
-| FT-01 | Phase 08 | Complete |
-| FT-02 | Phase 08 | Complete |
+| FT-01 | Phase 08 | Done |
+| FT-02 | Phase 08 | Done |

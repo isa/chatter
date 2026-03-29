@@ -22,7 +22,7 @@ Qwen3-TTS integration with voice design, voice cloning, speech generation, and m
 - [ ] **Phase 05: CLI Engine Routing** - Add --engine flag and profile engine tagging in Rust
 - [x] **Phase 06: ChatterBox Inference** - Implement ChatterBox voice cloning and speech generation (2026-03-29)
 - [x] **Phase 07: Model Management and Diagnostics** - Extend model and doctor commands for ChatterBox (2026-03-29)
-- [ ] **Phase 08: ChatterBox Controls** - Expose emotion, exaggeration, and paralinguistic tag features
+- [x] **Phase 08: ChatterBox Controls** - Expose emotion, exaggeration, and paralinguistic tag features (2026-03-29)
 
 ## Phase Details
 
