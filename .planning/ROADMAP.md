@@ -20,7 +20,7 @@ Qwen3-TTS integration with voice design, voice cloning, speech generation, and m
 
 - [ ] **Phase 04: Engine Abstraction** - Refactor Python bridge into multi-engine dispatcher
 - [ ] **Phase 05: CLI Engine Routing** - Add --engine flag and profile engine tagging in Rust
-- [ ] **Phase 06: ChatterBox Inference** - Implement ChatterBox voice cloning and speech generation
+- [x] **Phase 06: ChatterBox Inference** - Implement ChatterBox voice cloning and speech generation (2026-03-29)
 - [ ] **Phase 07: Model Management and Diagnostics** - Extend model and doctor commands for ChatterBox
 - [ ] **Phase 08: ChatterBox Controls** - Expose emotion, exaggeration, and paralinguistic tag features
 
@@ -64,8 +64,8 @@ Plans:
   5. `chatter --engine chatterbox` works on Apple Silicon (via MLX community models or MPS fallback)
 **Plans**: 2 plans
 Plans:
-- [ ] 06-01-PLAN.md -- Curated dependency installation pipeline and engine-aware model download
-- [ ] 06-02-PLAN.md -- ChatterBox engine module implementation and memory-safe engine switching
+- [x] 06-01-PLAN.md -- Curated dependency installation pipeline and engine-aware model download
+- [x] 06-02-PLAN.md -- ChatterBox engine module implementation and memory-safe engine switching
 
 ### Phase 07: Model Management and Diagnostics
 **Goal**: Users can download, list, and diagnose ChatterBox models through existing CLI commands
@@ -99,6 +99,6 @@ Note: Phase 07 and Phase 08 both depend on Phase 06 but are independent of each 
 |-------|-----------|----------------|--------|-----------|
 | 04. Engine Abstraction | v1.1 | 0/1 | Planning complete | - |
 | 05. CLI Engine Routing | v1.1 | 0/1 | Planning complete | - |
-| 06. ChatterBox Inference | v1.1 | 0/2 | Planning complete | - |
+| 06. ChatterBox Inference | v1.1 | 2/2 | Complete | 2026-03-29 |
 | 07. Model Management and Diagnostics | v1.1 | 0/TBD | Not started | - |
 | 08. ChatterBox Controls | v1.1 | 0/TBD | Not started | - |
