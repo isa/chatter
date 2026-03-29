@@ -208,6 +208,22 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             }
         }
 
+        // ChatterBox hardware compatibility note
+        if info.chatterbox_installed {
+            match &info.backend {
+                Some(ComputeBackend::Mlx { .. }) => {
+                    println!("    CB hardware: MLX (Original + Turbo via mlx-community models)");
+                }
+                Some(ComputeBackend::Cuda { .. }) => {
+                    println!("    CB hardware: CUDA (all variants supported)");
+                }
+                Some(ComputeBackend::Mps) => {
+                    println!("    CB hardware: MPS (all variants supported)");
+                }
+                _ => {}
+            }
+        }
+
         // HF Cache / Disk
         if let Some(path) = &info.hf_cache_path {
             if let Some(size_gb) = info.hf_cache_size_gb {
@@ -306,6 +322,28 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
                     println!(
                         "You can install manually: pip install chatterbox-tts"
                     );
+                }
+            }
+
+            // Download ChatterBox models after deps are installed
+            if cb_models_missing {
+                let spinner = ui::create_spinner("Downloading ChatterBox models");
+                match bridge::model::download_model_chatterbox() {
+                    Ok(()) => {
+                        spinner.finish_with_message("ChatterBox models downloaded");
+                    }
+                    Err(e) => {
+                        spinner.abandon_with_message("ChatterBox model download failed");
+                        let warn = "Warning:"
+                            .if_supports_color(Stream::Stdout, |t| t.yellow().to_string())
+                            .to_string();
+                        println!(
+                            "{warn} ChatterBox model download failed (optional): {e}"
+                        );
+                        println!(
+                            "You can download manually: chatter model download --engine chatterbox"
+                        );
+                    }
                 }
             }
         }
