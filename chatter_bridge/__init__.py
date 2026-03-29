@@ -139,9 +139,9 @@ def load_clone_prompt(path):
     return _get_engine().load_clone_prompt(path)
 
 
-def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2):
+def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2, exaggeration=0.5, cfg_weight=0.5):
     """Generate speech from text using a saved profile."""
-    return _get_engine().generate_speech(text, language, profile_dir, ref_text, temperature, repetition_penalty)
+    return _get_engine().generate_speech(text, language, profile_dir, ref_text, temperature, repetition_penalty, exaggeration, cfg_weight)
 
 
 def voice_clone_from_audio(ref_audio_path, text, language):

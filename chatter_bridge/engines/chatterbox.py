@@ -45,7 +45,7 @@ def load_clone_prompt(path):
     raise NotImplementedError("ChatterBox engine not yet implemented")
 
 
-def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2):
+def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2, exaggeration=0.5, cfg_weight=0.5):
     raise NotImplementedError("ChatterBox engine not yet implemented")
 
 
