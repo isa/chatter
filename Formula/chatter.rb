@@ -5,7 +5,7 @@ class Chatter < Formula
   version "1.0.0"
 
   url "https://github.com/isa/chatter/archive/refs/tags/v#{version}.tar.gz"
-  sha256 "f56555b712e2157e53181deda542d66cc8bec63ee1822db8d9a9e39e25dd3301"
+  sha256 "ceecb25dbc6004e9250035b8cb1fa41fa8e00b5350ba4325e2cec45693dd0db3"
 
   depends_on "rust" => :build
   depends_on "python@3.12"
