@@ -41,6 +41,9 @@ fn run() -> anyhow::Result<()> {
                 return Err(e);
             }
         }
+
+        // Set the active TTS engine in the Python bridge
+        bridge::set_engine(cli.global.engine.as_str())?;
     }
 
     match cli.command {

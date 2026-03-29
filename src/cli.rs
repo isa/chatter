@@ -29,6 +29,35 @@ pub struct GlobalArgs {
     /// Language for TTS output
     #[arg(long, global = true, value_enum, default_value_t = Language::Auto)]
     pub language: Language,
+
+    /// TTS engine to use
+    #[arg(long, global = true, value_enum, default_value_t = Engine::Qwen, env = "CHATTER_ENGINE")]
+    pub engine: Engine,
+}
+
+/// Supported TTS engines.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Engine {
+    /// Qwen3-TTS (supports design and clone)
+    Qwen,
+    /// ChatterBox (clone only)
+    Chatterbox,
+}
+
+impl Engine {
+    /// Return the engine name as a string for the Python bridge.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Engine::Qwen => "qwen",
+            Engine::Chatterbox => "chatterbox",
+        }
+    }
+}
+
+impl std::fmt::Display for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 /// Model quantization variant for MLX models.

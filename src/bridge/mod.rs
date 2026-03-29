@@ -8,8 +8,8 @@ pub mod venv;
 pub use doctor::{get_system_info, SystemInfo};
 pub use error::BridgeError;
 pub use inference::{
-    create_and_save_clone_prompt, generate_speech, unload_all_models, voice_clone_from_audio,
-    voice_design,
+    create_and_save_clone_prompt, generate_speech, set_engine, unload_all_models,
+    voice_clone_from_audio, voice_design,
 };
 pub use model::{download_model, list_cached_models, ModelInfo, ModelQuantization};
 pub use runtime::{detect_backend, ComputeBackend};

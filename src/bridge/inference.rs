@@ -5,6 +5,15 @@ use pyo3::prelude::*;
 use super::error::BridgeError;
 use super::model::ModelQuantization;
 
+/// Set the active TTS engine in the Python bridge.
+pub fn set_engine(engine_name: &str) -> Result<(), BridgeError> {
+    Python::attach(|py| {
+        let bridge = import_bridge(py)?;
+        bridge.call_method1("set_engine", (engine_name,))?;
+        Ok(())
+    })
+}
+
 /// Resolve the quantization to use: explicit override, or auto-detect from cache.
 fn resolve_quantization(override_quant: Option<ModelQuantization>) -> Result<ModelQuantization, BridgeError> {
     if let Some(q) = override_quant {
