@@ -3,13 +3,35 @@ use std::path::Path;
 use pyo3::prelude::*;
 
 use super::error::BridgeError;
+use super::model::ModelQuantization;
+
+/// Resolve the quantization to use: explicit override, or auto-detect from cache.
+fn resolve_quantization(override_quant: Option<ModelQuantization>) -> Result<ModelQuantization, BridgeError> {
+    if let Some(q) = override_quant {
+        return Ok(q);
+    }
+    let backend = super::runtime::detect_backend()?;
+    super::model::detect_cached_quantization(&backend)
+}
+
+/// Configure the Python bridge to use the given quantization suffix (MLX only).
+fn configure_mlx_quantization(quant: &ModelQuantization) -> Result<(), BridgeError> {
+    Python::attach(|py| {
+        let bridge = import_bridge(py)?;
+        bridge.call_method1("set_mlx_quantization", (quant.mlx_suffix(),))?;
+        Ok(())
+    })
+}
 
 /// Run voice design inference. Returns (audio_samples_f32, sample_rate).
 pub fn voice_design(
     text: &str,
     language: &str,
     instruct: &str,
+    quant_override: Option<ModelQuantization>,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
+    let quant = resolve_quantization(quant_override)?;
+    configure_mlx_quantization(&quant)?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let result = bridge.call_method1("voice_design", (text, language, instruct))?;
@@ -26,7 +48,10 @@ pub fn create_and_save_clone_prompt(
     ref_audio_path: &Path,
     ref_text: &str,
     profile_dir: &Path,
+    quant_override: Option<ModelQuantization>,
 ) -> Result<(), BridgeError> {
+    let quant = resolve_quantization(quant_override)?;
+    configure_mlx_quantization(&quant)?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let backend: String = bridge.call_method0("detect_backend")?.extract()?;
@@ -67,7 +92,10 @@ pub fn generate_speech(
     profile_dir: &Path,
     ref_text: &str,
     slow: bool,
+    quant_override: Option<ModelQuantization>,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
+    let quant = resolve_quantization(quant_override)?;
+    configure_mlx_quantization(&quant)?;
     let temperature: f64 = if slow { 0.5 } else { 0.7 };
     let repetition_penalty: f64 = if slow { 1.4 } else { 1.2 };
     Python::attach(|py| {
@@ -89,7 +117,10 @@ pub fn voice_clone_from_audio(
     ref_audio_path: &Path,
     text: &str,
     language: &str,
+    quant_override: Option<ModelQuantization>,
 ) -> Result<(Vec<f32>, u32), BridgeError> {
+    let quant = resolve_quantization(quant_override)?;
+    configure_mlx_quantization(&quant)?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let result = bridge.call_method1(
@@ -104,7 +135,9 @@ pub fn voice_clone_from_audio(
 
 /// Ensure a model is loaded, returning whether it was already cached.
 /// model_type: "design", "base", or "custom"
-pub fn ensure_model_loaded(model_type: &str) -> Result<bool, BridgeError> {
+pub fn ensure_model_loaded(model_type: &str, quant_override: Option<ModelQuantization>) -> Result<bool, BridgeError> {
+    let quant = resolve_quantization(quant_override)?;
+    configure_mlx_quantization(&quant)?;
     Python::attach(|py| {
         let bridge = import_bridge(py)?;
         let was_loaded: bool = bridge.call_method1("ensure_model", (model_type,))?.extract()?;

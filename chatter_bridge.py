@@ -79,6 +79,23 @@ def detect_backend():
     return "cpu"
 
 
+def _mlx_quant_suffix():
+    """Return the current MLX quantization suffix (set from Rust via set_mlx_quantization)."""
+    return getattr(sys.modules[__name__], '_mlx_quant', 'bf16')
+
+
+def set_mlx_quantization(suffix):
+    """Set the MLX quantization suffix (e.g. 'bf16' or '8bit').
+
+    If the suffix changes and models are already loaded, they are unloaded
+    so the next load picks up the new quantization.
+    """
+    current = _mlx_quant_suffix()
+    sys.modules[__name__]._mlx_quant = suffix
+    if current != suffix and _models:
+        unload_all_models()
+
+
 def load_design_model():
     """Load the VoiceDesign model. Caches in _models dict."""
     if "design" in _models:
@@ -87,7 +104,8 @@ def load_design_model():
     with _suppress_output():
         if backend == "mlx":
             from mlx_audio.tts.utils import load_model
-            model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16")
+            suffix = _mlx_quant_suffix()
+            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-{suffix}")
         else:
             from qwen_tts import Qwen3TTSModel
             import torch
@@ -109,7 +127,8 @@ def load_base_model():
     with _suppress_output():
         if backend == "mlx":
             from mlx_audio.tts.utils import load_model
-            model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16")
+            suffix = _mlx_quant_suffix()
+            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-Base-{suffix}")
         else:
             from qwen_tts import Qwen3TTSModel
             import torch
@@ -131,7 +150,8 @@ def load_custom_voice_model():
     with _suppress_output():
         if backend == "mlx":
             from mlx_audio.tts.utils import load_model
-            model = load_model("mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16")
+            suffix = _mlx_quant_suffix()
+            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-{suffix}")
         else:
             from qwen_tts import Qwen3TTSModel
             import torch

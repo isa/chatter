@@ -207,7 +207,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         println!();
         println!("Downloading models...");
         let spinner = ui::create_spinner("Downloading Qwen3-TTS 1.7B models");
-        match bridge::download_model() {
+        match bridge::download_model(&bridge::ModelQuantization::EightBit) {
             Ok(()) => {
                 spinner.finish_with_message("Models downloaded");
                 println!();

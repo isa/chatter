@@ -5,6 +5,7 @@ use dialoguer::{Input, Select};
 
 use crate::audio;
 use crate::bridge::inference;
+use crate::bridge::model::ModelQuantization;
 use crate::cli::{DesignArgs, GlobalArgs, Language};
 use crate::profile::storage::{self, PREVIEW_SENTENCE};
 use crate::profile::{AudioInfo, ProfileInfo, ProfileMetadata, ProfileType};
@@ -29,6 +30,7 @@ fn language_to_str(lang: &Language) -> &'static str {
 
 pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let language_str = language_to_str(&global.language);
+    let quant_override = args.variant.map(ModelQuantization::from);
     let mut description = args.description.clone();
     let mut attempt = 0u32;
 
@@ -43,7 +45,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         // First attempt: load model without spinner so Python's download/checkpoint
         // progress shows through. Subsequent attempts: model is cached, use spinner.
         if attempt == 1 {
-            let _was_cached = inference::ensure_model_loaded("design")
+            let _was_cached = inference::ensure_model_loaded("design", quant_override)
                 .map_err(|e| anyhow::anyhow!(e).context("Failed to load VoiceDesign model"))?;
         }
 
@@ -53,7 +55,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             "Designing voice..."
         });
 
-        let result = inference::voice_design(PREVIEW_SENTENCE, language_str, &description);
+        let result = inference::voice_design(PREVIEW_SENTENCE, language_str, &description, quant_override);
 
         let (wav, sr) = match result {
             Ok(data) => {
@@ -165,7 +167,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
 
     // Create reusable clone prompt (saves voice_prompt.bin or keeps ref_audio.wav for MLX)
     let spinner = ui::create_spinner("Saving voice profile...");
-    inference::create_and_save_clone_prompt(&ref_wav_path, PREVIEW_SENTENCE, &profile_dir)
+    inference::create_and_save_clone_prompt(&ref_wav_path, PREVIEW_SENTENCE, &profile_dir, quant_override)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to create clone prompt"))?;
 
     // Encode accepted audio to sample.mp3
