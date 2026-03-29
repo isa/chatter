@@ -147,6 +147,18 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         }
     }
 
+    // 2c. Set ChatterBox variant before inference if applicable
+    if global.engine == Engine::Chatterbox || profile.profile.engine == "chatterbox" {
+        // Use CLI flag if provided, otherwise fall back to profile's stored variant, otherwise default
+        let variant_str = args
+            .cb_variant
+            .map(|v| v.as_str().to_string())
+            .or_else(|| profile.profile.cb_variant.clone())
+            .unwrap_or_else(|| "original".to_string());
+        inference::set_variant(&variant_str)
+            .map_err(|e| anyhow::anyhow!(e).context("Failed to set ChatterBox variant"))?;
+    }
+
     // 3. Get profile directory
     let profile_dir = storage::profile_dir(&args.profile)?;
 

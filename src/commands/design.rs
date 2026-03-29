@@ -204,6 +204,7 @@ pub fn run(args: DesignArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             created: chrono::Utc::now().to_rfc3339(),
             model_variant,
             engine: "qwen".to_string(),
+            cb_variant: None,
         },
         audio: AudioInfo {
             sample_text: PREVIEW_SENTENCE.to_string(),

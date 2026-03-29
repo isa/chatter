@@ -9,7 +9,7 @@ use owo_colors::Style;
 use crate::audio;
 use crate::bridge::inference as bridge;
 use crate::bridge::model::ModelQuantization;
-use crate::cli::{CloneArgs, Engine, GlobalArgs, Language};
+use crate::cli::{ChatterBoxVariant, CloneArgs, Engine, GlobalArgs, Language};
 use crate::profile::storage::{self, PREVIEW_SENTENCE};
 use crate::profile::{AudioInfo, ProfileInfo, ProfileMetadata, ProfileType};
 use crate::ui;
@@ -37,6 +37,16 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
 
     let language_str = language_to_string(&global.language);
     let quant_override = args.variant.map(ModelQuantization::from);
+
+    // Set ChatterBox variant before inference (per D-06)
+    let cb_variant_str = if global.engine == Engine::Chatterbox {
+        let variant = args.cb_variant.unwrap_or(ChatterBoxVariant::Original);
+        bridge::set_variant(variant.as_str())
+            .map_err(|e| anyhow::anyhow!(e).context("Failed to set ChatterBox variant"))?;
+        Some(variant.as_str().to_string())
+    } else {
+        None
+    };
 
     // Use system temp dir for previews during the clone loop
     let temp_dir = std::env::temp_dir().join("chatter-preview");
@@ -175,11 +185,22 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         .context("Failed to encode sample MP3")?;
     ui::finish_spinner(&spinner, "Voice profile saved");
 
-    // Determine model variant based on detected backend
-    let backend = bridge::detected_backend().unwrap_or_else(|_| "unknown".to_string());
-    let model_variant = match backend.as_str() {
-        "mlx" => "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16".to_string(),
-        _ => "Qwen/Qwen3-TTS-1.7B-CustomVoice".to_string(),
+    // Determine model variant based on engine and detected backend
+    let model_variant = if global.engine == Engine::Chatterbox {
+        let backend = bridge::detected_backend().unwrap_or_else(|_| "unknown".to_string());
+        match backend.as_str() {
+            "mlx" => format!(
+                "mlx-community/chatterbox-{}-fp16",
+                args.cb_variant.unwrap_or(ChatterBoxVariant::Original).as_str()
+            ),
+            _ => "ResembleAI/chatterbox".to_string(),
+        }
+    } else {
+        let backend = bridge::detected_backend().unwrap_or_else(|_| "unknown".to_string());
+        match backend.as_str() {
+            "mlx" => "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16".to_string(),
+            _ => "Qwen/Qwen3-TTS-1.7B-CustomVoice".to_string(),
+        }
     };
 
     // Build and save profile metadata
@@ -200,6 +221,7 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             created: Utc::now().to_rfc3339(),
             model_variant,
             engine: global.engine.as_str().to_string(),
+            cb_variant: cb_variant_str,
         },
         audio: AudioInfo {
             sample_text: PREVIEW_SENTENCE.to_string(),

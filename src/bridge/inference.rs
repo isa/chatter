@@ -14,6 +14,16 @@ pub fn set_engine(engine_name: &str) -> Result<(), BridgeError> {
     })
 }
 
+/// Set the ChatterBox model variant (original, turbo, multilingual).
+/// Only meaningful when the active engine is chatterbox; no-op for qwen.
+pub fn set_variant(variant: &str) -> Result<(), BridgeError> {
+    Python::attach(|py| {
+        let bridge = import_bridge(py)?;
+        bridge.call_method1("set_variant", (variant,))?;
+        Ok(())
+    })
+}
+
 /// Resolve the quantization to use: explicit override, or auto-detect from cache.
 fn resolve_quantization(override_quant: Option<ModelQuantization>) -> Result<ModelQuantization, BridgeError> {
     if let Some(q) = override_quant {

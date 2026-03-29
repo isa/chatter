@@ -22,6 +22,10 @@ pub struct ProfileInfo {
     /// Defaults to "qwen" for backward compatibility with older profiles.
     #[serde(default = "default_engine")]
     pub engine: String,
+    /// ChatterBox model variant used to create this profile (original, turbo, multilingual).
+    /// Only set for chatterbox engine profiles. None for qwen profiles.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cb_variant: Option<String>,
 }
 
 fn default_engine() -> String {
