@@ -79,6 +79,10 @@ def _get_engine():
 def set_engine(name):
     """Switch the active engine module.
 
+    Per D-09/D-10: automatically unloads the previous engine's models
+    to prevent OOM on 16GB Macs. The --engine flag is the explicit
+    intent signal -- no confirmation prompt needed.
+
     Args:
         name: Engine name ("qwen" or "chatterbox").
     """
@@ -86,6 +90,14 @@ def set_engine(name):
     from chatter_bridge.engines import AVAILABLE_ENGINES
     if name not in AVAILABLE_ENGINES:
         raise ValueError(f"Unknown engine: {name!r}. Available: {list(AVAILABLE_ENGINES.keys())}")
+
+    # Unload current engine before switching (D-09: full cleanup)
+    if _active_engine is not None and _active_engine_name != name:
+        try:
+            _active_engine.unload_all_models()
+        except Exception:
+            pass  # Best-effort cleanup -- don't block engine switch
+
     _active_engine = importlib.import_module(AVAILABLE_ENGINES[name])
     _active_engine_name = name
 
@@ -157,6 +169,16 @@ def is_model_loaded(model_type):
 def ensure_model(model_type):
     """Load a model by type name if not already cached."""
     return _get_engine().ensure_model(model_type)
+
+
+def set_variant(variant):
+    """Set the ChatterBox model variant (original, turbo, multilingual).
+
+    Only meaningful for the chatterbox engine; no-op for qwen.
+    """
+    engine = _get_engine()
+    if hasattr(engine, 'set_variant'):
+        engine.set_variant(variant)
 
 
 def unload_all_models():
