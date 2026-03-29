@@ -59,6 +59,15 @@ pub fn model_variants(backend: &ComputeBackend, quant: &ModelQuantization) -> Ve
     }
 }
 
+/// All ChatterBox model variants (HuggingFace repo IDs).
+pub fn chatterbox_model_variants() -> Vec<String> {
+    vec![
+        "ResembleAI/chatterbox".to_string(),
+        "mlx-community/chatterbox-fp16".to_string(),
+        "mlx-community/chatterbox-turbo-fp16".to_string(),
+    ]
+}
+
 /// Detect which quantization variant is cached for the given backend.
 /// Prefers 8bit if both are cached. Returns Bf16 as fallback if nothing is cached
 /// (so that inference auto-detect has a sensible default).
@@ -144,9 +153,12 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
             let repo: Bound<'_, PyAny> = repo?;
             let repo_id: String = repo.getattr("repo_id")?.extract()?;
 
-            if !repo_id.starts_with("Qwen/Qwen3-TTS-12Hz-")
-                && !repo_id.starts_with("mlx-community/Qwen3-TTS-12Hz-")
-            {
+            let is_qwen = repo_id.starts_with("Qwen/Qwen3-TTS-12Hz-")
+                || repo_id.starts_with("mlx-community/Qwen3-TTS-12Hz-");
+            let is_chatterbox = repo_id.starts_with("ResembleAI/chatterbox")
+                || repo_id.starts_with("mlx-community/chatterbox");
+
+            if !is_qwen && !is_chatterbox {
                 continue;
             }
 
@@ -154,7 +166,9 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
             let repo_path: String = repo.getattr("repo_path")?.str()?.extract()?;
 
             // Extract a human-readable size label from the repo ID
-            let label = if repo_id.contains("1.7B") {
+            let label = if is_chatterbox {
+                "ChatterBox"
+            } else if repo_id.contains("1.7B") {
                 "1.7B"
             } else {
                 "unknown"
@@ -169,6 +183,71 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
         }
 
         Ok(models)
+    })
+}
+
+/// Download ChatterBox model variants from HuggingFace.
+///
+/// Downloads all ChatterBox model repos using `huggingface_hub.snapshot_download()`.
+pub fn download_model_chatterbox() -> Result<(), BridgeError> {
+    let variants = chatterbox_model_variants();
+
+    Python::attach(|py| {
+        let hf_hub = import_hf_hub(py)?;
+        let snapshot_download = hf_hub.getattr("snapshot_download")?;
+
+        for (i, repo_id) in variants.iter().enumerate() {
+            let short_name = repo_id.rsplit('/').next().unwrap_or(repo_id);
+            eprintln!("[{}/{}] {short_name}", i + 1, variants.len());
+            snapshot_download.call1((repo_id.as_str(),))?;
+        }
+
+        Ok(())
+    })
+}
+
+/// Remove all cached ChatterBox model variants.
+///
+/// Scans the HF cache and removes repos matching ChatterBox patterns.
+pub fn remove_chatterbox_models() -> Result<(), BridgeError> {
+    let variants = chatterbox_model_variants();
+
+    Python::attach(|py| {
+        let hf_hub = import_hf_hub(py)?;
+
+        let cache_info = hf_hub.call_method0("scan_cache_dir")?;
+        let repos = cache_info.getattr("repos")?;
+        let repos_iter = PyIterator::from_object(&repos)?;
+
+        let mut revision_hashes: Vec<String> = Vec::new();
+
+        for repo in repos_iter {
+            let repo: Bound<'_, PyAny> = repo?;
+            let repo_id: String = repo.getattr("repo_id")?.extract()?;
+
+            if !variants.iter().any(|v| v == &repo_id) {
+                continue;
+            }
+
+            let revisions = repo.getattr("revisions")?;
+            let revisions_iter = PyIterator::from_object(&revisions)?;
+            for rev in revisions_iter {
+                let rev: Bound<'_, PyAny> = rev?;
+                let commit_hash: String = rev.getattr("commit_hash")?.extract()?;
+                revision_hashes.push(commit_hash);
+            }
+        }
+
+        if revision_hashes.is_empty() {
+            return Err(BridgeError::ModelNotFound(
+                "No cached ChatterBox models found".to_string(),
+            ));
+        }
+
+        let delete_strategy = cache_info.call_method1("delete_revisions", (revision_hashes,))?;
+        delete_strategy.call_method0("execute")?;
+
+        Ok(())
     })
 }
 

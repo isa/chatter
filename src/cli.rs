@@ -60,6 +60,28 @@ impl std::fmt::Display for Engine {
     }
 }
 
+/// ChatterBox model variant selection.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatterBoxVariant {
+    /// Original model (English, emotion controls)
+    Original,
+    /// Turbo model (fastest, paralinguistic tags)
+    Turbo,
+    /// Multilingual model (23 languages)
+    Multilingual,
+}
+
+impl ChatterBoxVariant {
+    /// Return the variant name as a string for the Python bridge.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChatterBoxVariant::Original => "original",
+            ChatterBoxVariant::Turbo => "turbo",
+            ChatterBoxVariant::Multilingual => "multilingual",
+        }
+    }
+}
+
 /// Model quantization variant for MLX models.
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelVariant {
@@ -136,6 +158,10 @@ pub struct CloneArgs {
     /// Model quantization variant (bf16 or 8bit, MLX only -- auto-detects from cache if omitted)
     #[arg(long)]
     pub variant: Option<ModelVariant>,
+
+    /// ChatterBox model variant (original, turbo, multilingual)
+    #[arg(long, value_enum)]
+    pub cb_variant: Option<ChatterBoxVariant>,
 }
 
 /// Arguments for the generate subcommand.
@@ -174,6 +200,10 @@ pub struct GenerateArgs {
     /// Model quantization variant (bf16 or 8bit, MLX only -- auto-detects from cache if omitted)
     #[arg(long)]
     pub variant: Option<ModelVariant>,
+
+    /// ChatterBox model variant (original, turbo, multilingual)
+    #[arg(long, value_enum)]
+    pub cb_variant: Option<ChatterBoxVariant>,
 }
 
 /// Profile management subcommands.

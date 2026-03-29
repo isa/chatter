@@ -7,7 +7,7 @@ use owo_colors::Stream::Stderr;
 
 use crate::bridge;
 use crate::bridge::model::{size_label, ModelQuantization};
-use crate::cli::{GlobalArgs, ModelCommands};
+use crate::cli::{Engine, GlobalArgs, ModelCommands};
 
 /// Create a spinner with the standard chatter style.
 ///
@@ -49,23 +49,49 @@ fn print_error(err: &anyhow::Error, verbose: bool) {
 pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
     match command {
         ModelCommands::Download { variant } => {
-            let label = size_label();
-            let quant = ModelQuantization::from(variant);
-            let suffix = quant.mlx_suffix();
+            match global.engine {
+                Engine::Chatterbox => {
+                    eprintln!("Installing ChatterBox dependencies and downloading models...\n");
 
-            // No spinner here — HuggingFace's snapshot_download shows its own
-            // tqdm progress bars for file counts and byte-level download progress.
-            // A concurrent spinner would fight over stderr and cause flickering.
-            eprintln!("Downloading Qwen3-TTS {label} ({suffix}) models (VoiceDesign, CustomVoice, Base)...\n");
+                    if let Err(e) = bridge::venv::install_chatterbox_deps() {
+                        let err = anyhow::Error::from(e)
+                            .context("ChatterBox dependency installation failed");
+                        print_error(&err, global.verbose);
+                        return Err(err);
+                    }
 
-            match bridge::model::download_model(&quant) {
-                Ok(()) => {
-                    eprintln!("\nQwen3-TTS {label} ({suffix}) download complete.");
+                    match bridge::model::download_model_chatterbox() {
+                        Ok(()) => {
+                            eprintln!("\nChatterBox installation complete.");
+                        }
+                        Err(e) => {
+                            let err = anyhow::Error::from(e)
+                                .context("ChatterBox model download failed");
+                            print_error(&err, global.verbose);
+                            return Err(err);
+                        }
+                    }
                 }
-                Err(e) => {
-                    let err = anyhow::Error::from(e).context("Model download failed");
-                    print_error(&err, global.verbose);
-                    return Err(err);
+                Engine::Qwen => {
+                    let label = size_label();
+                    let quant = ModelQuantization::from(variant);
+                    let suffix = quant.mlx_suffix();
+
+                    // No spinner here — HuggingFace's snapshot_download shows its own
+                    // tqdm progress bars for file counts and byte-level download progress.
+                    // A concurrent spinner would fight over stderr and cause flickering.
+                    eprintln!("Downloading Qwen3-TTS {label} ({suffix}) models (VoiceDesign, CustomVoice, Base)...\n");
+
+                    match bridge::model::download_model(&quant) {
+                        Ok(()) => {
+                            eprintln!("\nQwen3-TTS {label} ({suffix}) download complete.");
+                        }
+                        Err(e) => {
+                            let err = anyhow::Error::from(e).context("Model download failed");
+                            print_error(&err, global.verbose);
+                            return Err(err);
+                        }
+                    }
                 }
             }
         }
@@ -97,22 +123,48 @@ pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
         }
 
         ModelCommands::Remove => {
-            let label = size_label();
-            let spinner = create_spinner(&format!("Removing Qwen3-TTS {label}"));
+            match global.engine {
+                Engine::Chatterbox => {
+                    let spinner = create_spinner("Removing ChatterBox models");
 
-            match bridge::model::remove_model() {
-                Ok(()) => {
-                    spinner.finish_with_message(format!("Qwen3-TTS {label} removed"));
+                    match bridge::model::remove_chatterbox_models() {
+                        Ok(()) => {
+                            spinner.finish_with_message("ChatterBox models removed");
+                        }
+                        Err(bridge::BridgeError::ModelNotFound(msg)) => {
+                            spinner.abandon_with_message(msg.clone());
+                            println!("{msg}");
+                        }
+                        Err(e) => {
+                            spinner.abandon_with_message("Failed to remove ChatterBox models");
+                            let err =
+                                anyhow::Error::from(e).context("ChatterBox model removal failed");
+                            print_error(&err, global.verbose);
+                            return Err(err);
+                        }
+                    }
                 }
-                Err(bridge::BridgeError::ModelNotFound(msg)) => {
-                    spinner.abandon_with_message(msg.clone());
-                    println!("{msg}");
-                }
-                Err(e) => {
-                    spinner.abandon_with_message(format!("Failed to remove Qwen3-TTS {label}"));
-                    let err = anyhow::Error::from(e).context("Model removal failed");
-                    print_error(&err, global.verbose);
-                    return Err(err);
+                Engine::Qwen => {
+                    let label = size_label();
+                    let spinner = create_spinner(&format!("Removing Qwen3-TTS {label}"));
+
+                    match bridge::model::remove_model() {
+                        Ok(()) => {
+                            spinner.finish_with_message(format!("Qwen3-TTS {label} removed"));
+                        }
+                        Err(bridge::BridgeError::ModelNotFound(msg)) => {
+                            spinner.abandon_with_message(msg.clone());
+                            println!("{msg}");
+                        }
+                        Err(e) => {
+                            spinner.abandon_with_message(format!(
+                                "Failed to remove Qwen3-TTS {label}"
+                            ));
+                            let err = anyhow::Error::from(e).context("Model removal failed");
+                            print_error(&err, global.verbose);
+                            return Err(err);
+                        }
+                    }
                 }
             }
         }
