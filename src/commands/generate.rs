@@ -210,15 +210,19 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let mut audio_parts: Vec<(Vec<f32>, u32)> = Vec::with_capacity(chunks.len());
     if chunks.len() == 1 {
         let spinner = ui::create_spinner("Generating audio...");
-        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text, false, quant_override)
+        let exaggeration = args.exaggeration.unwrap_or(0.5);
+        let cfg_weight = args.cfg.unwrap_or(0.5);
+        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text, false, quant_override, exaggeration, cfg_weight)
             .map_err(|e| anyhow::anyhow!(e))
             .context("Speech generation failed")?;
         audio_parts.push((wav, sr));
         ui::finish_spinner(&spinner, "Audio generated");
     } else {
         let pb = ui::create_progress_bar(chunks.len() as u64, "Generating audio");
+        let exaggeration = args.exaggeration.unwrap_or(0.5);
+        let cfg_weight = args.cfg.unwrap_or(0.5);
         for chunk_text in &chunks {
-            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text, false, quant_override)
+            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text, false, quant_override, exaggeration, cfg_weight)
                 .map_err(|e| anyhow::anyhow!(e))
                 .context("Speech generation failed")?;
             audio_parts.push((wav, sr));

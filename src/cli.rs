@@ -174,6 +174,14 @@ pub struct GenerateArgs {
     /// Model quantization variant (bf16 or 8bit, MLX only -- auto-detects from cache if omitted)
     #[arg(long)]
     pub variant: Option<ModelVariant>,
+
+    /// Exaggeration level for ChatterBox Original (0.0-1.0, default: 0.5)
+    #[arg(long)]
+    pub exaggeration: Option<f64>,
+
+    /// Classifier-free guidance weight for ChatterBox Original
+    #[arg(long)]
+    pub cfg: Option<f64>,
 }
 
 /// Profile management subcommands.
