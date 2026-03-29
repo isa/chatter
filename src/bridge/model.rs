@@ -3,8 +3,9 @@ use pyo3::types::PyIterator;
 
 use super::error::BridgeError;
 use super::runtime::ComputeBackend;
+use crate::cli::ModelVariant;
 
-/// Model quantization level for MLX variants.
+/// Model quantization level for MLX models.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelQuantization {
     Bf16,
@@ -12,19 +13,20 @@ pub enum ModelQuantization {
 }
 
 impl ModelQuantization {
-    /// Return the suffix used in MLX HuggingFace repo IDs.
+    /// Return the MLX repo suffix for this quantization level.
     pub fn mlx_suffix(&self) -> &'static str {
         match self {
-            ModelQuantization::Bf16 => "bf16",
-            ModelQuantization::EightBit => "8bit",
+            Self::Bf16 => "bf16",
+            Self::EightBit => "8bit",
         }
     }
+}
 
-    /// Return a human-readable label for display.
-    pub fn label(&self) -> &'static str {
-        match self {
-            ModelQuantization::Bf16 => "bf16",
-            ModelQuantization::EightBit => "8bit",
+impl From<ModelVariant> for ModelQuantization {
+    fn from(v: ModelVariant) -> Self {
+        match v {
+            ModelVariant::Bf16 => ModelQuantization::Bf16,
+            ModelVariant::EightBit => ModelQuantization::EightBit,
         }
     }
 }
@@ -38,9 +40,8 @@ pub struct ModelInfo {
 }
 
 /// All Qwen3-TTS 1.7B model variants.
-/// Returns MLX variants (with quantization suffix) if backend is MLX, otherwise PyTorch variants.
-/// For non-MLX backends, the quantization parameter is ignored (PyTorch has no 8bit variants).
-pub fn model_variants(backend: &ComputeBackend, quant: ModelQuantization) -> Vec<String> {
+/// Returns MLX variants if backend is MLX, otherwise PyTorch variants.
+pub fn model_variants(backend: &ComputeBackend, quant: &ModelQuantization) -> Vec<String> {
     match backend {
         ComputeBackend::Mlx { .. } => {
             let suffix = quant.mlx_suffix();
@@ -55,6 +56,31 @@ pub fn model_variants(backend: &ComputeBackend, quant: ModelQuantization) -> Vec
             "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice".to_string(),
             "Qwen/Qwen3-TTS-12Hz-1.7B-Base".to_string(),
         ],
+    }
+}
+
+/// Detect which quantization variant is cached for the given backend.
+/// Prefers 8bit if both are cached. Returns Bf16 as fallback if nothing is cached
+/// (so that inference auto-detect has a sensible default).
+pub fn detect_cached_quantization(backend: &ComputeBackend) -> Result<ModelQuantization, BridgeError> {
+    match backend {
+        ComputeBackend::Mlx { .. } => {
+            // Check if 8bit models are cached
+            let eightbit_variants = model_variants(backend, &ModelQuantization::EightBit);
+            let cached = list_cached_models()?;
+            let has_8bit = eightbit_variants.iter().any(|v| cached.iter().any(|c| c.repo_id == *v));
+            if has_8bit {
+                return Ok(ModelQuantization::EightBit);
+            }
+            let bf16_variants = model_variants(backend, &ModelQuantization::Bf16);
+            let has_bf16 = bf16_variants.iter().any(|v| cached.iter().any(|c| c.repo_id == *v));
+            if has_bf16 {
+                return Ok(ModelQuantization::Bf16);
+            }
+            // Nothing cached; default to 8bit
+            Ok(ModelQuantization::EightBit)
+        }
+        _ => Ok(ModelQuantization::Bf16), // Non-MLX backends don't have quantization variants
     }
 }
 
@@ -82,15 +108,8 @@ fn import_hf_hub(py: Python<'_>) -> Result<Bound<'_, PyModule>, BridgeError> {
 /// Detects the compute backend to choose PyTorch or MLX variants.
 /// Uses `huggingface_hub.snapshot_download()` which downloads model files
 /// to the default HF cache (`~/.cache/huggingface/hub/`).
-/// For non-MLX backends, the quantization parameter is ignored.
-pub fn download_model(quant: ModelQuantization) -> Result<(), BridgeError> {
+pub fn download_model(quant: &ModelQuantization) -> Result<(), BridgeError> {
     let backend = super::runtime::detect_backend()?;
-
-    // Warn if user requests 8bit on non-MLX backend
-    if quant == ModelQuantization::EightBit && !matches!(backend, ComputeBackend::Mlx { .. }) {
-        eprintln!("Warning: 8-bit quantization is only available for MLX. Downloading standard PyTorch models.");
-    }
-
     let variants = model_variants(&backend, quant);
 
     Python::attach(|py| {
@@ -103,31 +122,6 @@ pub fn download_model(quant: ModelQuantization) -> Result<(), BridgeError> {
 
         Ok(())
     })
-}
-
-/// Detect which quantization variant is cached for the current backend.
-///
-/// For MLX: scans cached models for `-8bit` or `-bf16` suffixes.
-/// If both exist, prefers 8bit (smaller footprint per user decision).
-/// For non-MLX: always returns Bf16 (PyTorch repos have no quantization suffix).
-pub fn detect_cached_quantization(backend: &ComputeBackend) -> Result<ModelQuantization, BridgeError> {
-    if !matches!(backend, ComputeBackend::Mlx { .. }) {
-        return Ok(ModelQuantization::Bf16);
-    }
-
-    let models = list_cached_models()?;
-    let has_8bit = models.iter().any(|m| m.repo_id.ends_with("-8bit"));
-    let has_bf16 = models.iter().any(|m| m.repo_id.ends_with("-bf16"));
-
-    // Prefer 8bit when both are cached (user decision: smaller footprint)
-    if has_8bit {
-        Ok(ModelQuantization::EightBit)
-    } else if has_bf16 {
-        Ok(ModelQuantization::Bf16)
-    } else {
-        // No MLX models cached -- default to bf16
-        Ok(ModelQuantization::Bf16)
-    }
 }
 
 /// List all Qwen3-TTS models in the local HuggingFace cache.
@@ -176,11 +170,17 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
     })
 }
 
-/// Remove all cached 1.7B model variants (both bf16 and 8bit).
+/// Remove all cached 1.7B model variants.
 ///
-/// Scans the HF cache for any repos matching the Qwen3-TTS-12Hz prefix
-/// for the active backend and removes all of them regardless of quantization.
+/// Detects the compute backend to determine which variant repos to remove.
+/// Uses `huggingface_hub.scan_cache_dir()` to find matching revisions
+/// and deletes them via the cache management API.
 pub fn remove_model() -> Result<(), BridgeError> {
+    let backend = super::runtime::detect_backend()?;
+    // Remove all quantization variants (both bf16 and 8bit)
+    let mut variants = model_variants(&backend, &ModelQuantization::Bf16);
+    variants.extend(model_variants(&backend, &ModelQuantization::EightBit));
+
     Python::attach(|py| {
         let hf_hub = import_hf_hub(py)?;
 
@@ -194,10 +194,7 @@ pub fn remove_model() -> Result<(), BridgeError> {
             let repo: Bound<'_, PyAny> = repo?;
             let repo_id: String = repo.getattr("repo_id")?.extract()?;
 
-            // Match any Qwen3-TTS-12Hz model regardless of quantization variant
-            if !repo_id.starts_with("Qwen/Qwen3-TTS-12Hz-")
-                && !repo_id.starts_with("mlx-community/Qwen3-TTS-12Hz-")
-            {
+            if !variants.iter().any(|v| v == &repo_id) {
                 continue;
             }
 

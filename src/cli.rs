@@ -31,6 +31,16 @@ pub struct GlobalArgs {
     pub language: Language,
 }
 
+/// Model quantization variant for MLX models.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelVariant {
+    /// BFloat16 (higher quality, larger)
+    Bf16,
+    /// 8-bit quantized (default, smaller)
+    #[value(name = "8bit")]
+    EightBit,
+}
+
 /// Supported languages for Qwen3-TTS.
 #[derive(ValueEnum, Debug, Clone, PartialEq, Eq)]
 pub enum Language {
@@ -78,6 +88,10 @@ pub struct DesignArgs {
     /// Name for the voice profile
     #[arg(long)]
     pub name: Option<String>,
+
+    /// Model quantization variant (bf16 or 8bit, MLX only -- auto-detects from cache if omitted)
+    #[arg(long)]
+    pub variant: Option<ModelVariant>,
 }
 
 /// Arguments for the clone subcommand.
@@ -89,6 +103,10 @@ pub struct CloneArgs {
     /// Name for the voice profile
     #[arg(long)]
     pub name: Option<String>,
+
+    /// Model quantization variant (bf16 or 8bit, MLX only -- auto-detects from cache if omitted)
+    #[arg(long)]
+    pub variant: Option<ModelVariant>,
 }
 
 /// Arguments for the generate subcommand.
@@ -123,6 +141,10 @@ pub struct GenerateArgs {
     /// Speed multiplier for generated audio (default: 1.0, e.g. --speed 1.5 for faster)
     #[arg(long, default_value_t = 1.0)]
     pub speed: f32,
+
+    /// Model quantization variant (bf16 or 8bit, MLX only -- auto-detects from cache if omitted)
+    #[arg(long)]
+    pub variant: Option<ModelVariant>,
 }
 
 /// Profile management subcommands.
@@ -153,24 +175,13 @@ pub struct DoctorArgs {
     pub fix: bool,
 }
 
-/// Model quantization variants for download.
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModelVariant {
-    /// BFloat16 precision (default, higher quality)
-    #[value(name = "bf16")]
-    Bf16,
-    /// 8-bit quantized (smaller, ~50% less disk/memory)
-    #[value(name = "8bit")]
-    EightBit,
-}
-
 /// Model management subcommands.
 #[derive(Subcommand, Debug)]
 pub enum ModelCommands {
     /// Download all 1.7B model variants
     Download {
-        /// Model quantization variant (bf16 or 8bit, MLX only)
-        #[arg(long, default_value = "bf16")]
+        /// Model quantization variant (bf16 or 8bit)
+        #[arg(long, default_value = "8bit")]
         variant: ModelVariant,
     },
     /// List downloaded models and their disk usage

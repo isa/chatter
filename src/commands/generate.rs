@@ -6,6 +6,7 @@ use owo_colors::{OwoColorize, Stream, Style};
 
 use crate::audio;
 use crate::bridge::inference;
+use crate::bridge::model::ModelQuantization;
 use crate::chunk;
 use crate::cli::{GenerateArgs, GlobalArgs, Language};
 use crate::extract;
@@ -90,6 +91,8 @@ fn split_output_path(base: &Path, index: usize) -> PathBuf {
 }
 
 pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
+    let quant_override = args.variant.map(ModelQuantization::from);
+
     // 1. Get text input -- inline text or file extraction
     let text = match (&args.text, &args.file) {
         (Some(t), _) => t.clone(),
@@ -176,7 +179,7 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     // 7. Load model with spinner (all Python output is suppressed)
     {
         let spinner = ui::create_spinner("Loading model...");
-        inference::ensure_model_loaded("custom")
+        inference::ensure_model_loaded("custom", quant_override)
             .map_err(|e| anyhow::anyhow!(e))
             .context("Failed to load speech model")?;
         ui::finish_spinner(&spinner, "Model loaded");
@@ -186,7 +189,7 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let mut audio_parts: Vec<(Vec<f32>, u32)> = Vec::with_capacity(chunks.len());
     if chunks.len() == 1 {
         let spinner = ui::create_spinner("Generating audio...");
-        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text, false)
+        let (wav, sr) = inference::generate_speech(&chunks[0], language_str, &profile_dir, ref_text, false, quant_override)
             .map_err(|e| anyhow::anyhow!(e))
             .context("Speech generation failed")?;
         audio_parts.push((wav, sr));
@@ -194,7 +197,7 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     } else {
         let pb = ui::create_progress_bar(chunks.len() as u64, "Generating audio");
         for chunk_text in &chunks {
-            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text, false)
+            let (wav, sr) = inference::generate_speech(chunk_text, language_str, &profile_dir, ref_text, false, quant_override)
                 .map_err(|e| anyhow::anyhow!(e))
                 .context("Speech generation failed")?;
             audio_parts.push((wav, sr));

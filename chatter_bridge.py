@@ -79,16 +79,33 @@ def detect_backend():
     return "cpu"
 
 
-def load_design_model(quantization="bf16"):
-    """Load the VoiceDesign model. Caches in _models dict keyed by quantization."""
-    cache_key = f"design_{quantization}"
-    if cache_key in _models:
-        return _models[cache_key]
+def _mlx_quant_suffix():
+    """Return the current MLX quantization suffix (set from Rust via set_mlx_quantization)."""
+    return getattr(sys.modules[__name__], '_mlx_quant', 'bf16')
+
+
+def set_mlx_quantization(suffix):
+    """Set the MLX quantization suffix (e.g. 'bf16' or '8bit').
+
+    If the suffix changes and models are already loaded, they are unloaded
+    so the next load picks up the new quantization.
+    """
+    current = _mlx_quant_suffix()
+    sys.modules[__name__]._mlx_quant = suffix
+    if current != suffix and _models:
+        unload_all_models()
+
+
+def load_design_model():
+    """Load the VoiceDesign model. Caches in _models dict."""
+    if "design" in _models:
+        return _models["design"]
     backend = detect_backend()
     with _suppress_output():
         if backend == "mlx":
             from mlx_audio.tts.utils import load_model
-            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-{quantization}")
+            suffix = _mlx_quant_suffix()
+            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-{suffix}")
         else:
             from qwen_tts import Qwen3TTSModel
             import torch
@@ -98,20 +115,20 @@ def load_design_model(quantization="bf16"):
                 "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
                 device_map=device, dtype=dtype,
             )
-    _models[cache_key] = model
+    _models["design"] = model
     return model
 
 
-def load_base_model(quantization="bf16"):
-    """Load the Base model for clone prompt creation. Caches in _models dict keyed by quantization."""
-    cache_key = f"base_{quantization}"
-    if cache_key in _models:
-        return _models[cache_key]
+def load_base_model():
+    """Load the Base model for clone prompt creation. Caches in _models dict."""
+    if "base" in _models:
+        return _models["base"]
     backend = detect_backend()
     with _suppress_output():
         if backend == "mlx":
             from mlx_audio.tts.utils import load_model
-            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-Base-{quantization}")
+            suffix = _mlx_quant_suffix()
+            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-Base-{suffix}")
         else:
             from qwen_tts import Qwen3TTSModel
             import torch
@@ -121,20 +138,20 @@ def load_base_model(quantization="bf16"):
                 "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
                 device_map=device, dtype=dtype,
             )
-    _models[cache_key] = model
+    _models["base"] = model
     return model
 
 
-def load_custom_voice_model(quantization="bf16"):
-    """Load the CustomVoice model for generation with saved profiles. Caches in _models dict keyed by quantization."""
-    cache_key = f"custom_{quantization}"
-    if cache_key in _models:
-        return _models[cache_key]
+def load_custom_voice_model():
+    """Load the CustomVoice model for generation with saved profiles. Caches in _models dict."""
+    if "custom" in _models:
+        return _models["custom"]
     backend = detect_backend()
     with _suppress_output():
         if backend == "mlx":
             from mlx_audio.tts.utils import load_model
-            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-{quantization}")
+            suffix = _mlx_quant_suffix()
+            model = load_model(f"mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-{suffix}")
         else:
             from qwen_tts import Qwen3TTSModel
             import torch
@@ -144,14 +161,14 @@ def load_custom_voice_model(quantization="bf16"):
                 "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
                 device_map=device, dtype=dtype,
             )
-    _models[cache_key] = model
+    _models["custom"] = model
     return model
 
 
-def voice_design(text, language, instruct, quantization="bf16"):
+def voice_design(text, language, instruct):
     """Run VoiceDesign inference. Returns (list_of_floats, sample_rate)."""
     import numpy as np
-    model = load_design_model(quantization=quantization)
+    model = load_design_model()
     backend = detect_backend()
     with _suppress_output():
         if backend == "mlx":
@@ -170,7 +187,7 @@ def voice_design(text, language, instruct, quantization="bf16"):
             return audio.tolist(), int(sr)
 
 
-def create_clone_prompt(ref_audio_path, ref_text, quantization="bf16"):
+def create_clone_prompt(ref_audio_path, ref_text):
     """Create a reusable voice clone prompt from reference audio.
     Returns the prompt object (opaque -- save with save_clone_prompt).
     For MLX, returns None (MLX uses ref_audio directly).
@@ -178,7 +195,7 @@ def create_clone_prompt(ref_audio_path, ref_text, quantization="bf16"):
     backend = detect_backend()
     if backend == "mlx":
         return None  # MLX doesn't have clone prompts; uses ref_audio directly
-    model = load_base_model(quantization=quantization)
+    model = load_base_model()
     with _suppress_output():
         import soundfile as sf
         wav, sr = sf.read(ref_audio_path)
@@ -202,7 +219,7 @@ def load_clone_prompt(path):
     return torch.load(path, map_location=device)
 
 
-def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2, quantization="bf16"):
+def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, repetition_penalty=1.2):
     """Generate speech from text using a saved profile.
     profile_dir should contain either voice_prompt.bin (CUDA/MPS) or ref_audio.wav (MLX).
     ref_text is the transcript of ref_audio.wav (needed for MLX voice cloning).
@@ -214,7 +231,7 @@ def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, r
     with _suppress_output():
         if backend == "mlx":
             # MLX voice cloning uses the Base model with ref_audio + ref_text
-            model = load_base_model(quantization=quantization)
+            model = load_base_model()
             ref_audio_path = os.path.join(profile_dir, "ref_audio.wav")
             results = list(model.generate(
                 text=text, language=language,
@@ -229,7 +246,7 @@ def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, r
             audio = np.array(results[0].audio, dtype=np.float32)
             return audio.tolist(), 24000
         else:
-            model = load_custom_voice_model(quantization=quantization)
+            model = load_custom_voice_model()
             import torch
             prompt_path = os.path.join(profile_dir, "voice_prompt.bin")
             device = "cuda:0" if backend == "cuda" else "mps" if backend == "mps" else "cpu"
@@ -242,7 +259,7 @@ def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, r
             return audio.tolist(), int(sr)
 
 
-def voice_clone_from_audio(ref_audio_path, text, language, quantization="bf16"):
+def voice_clone_from_audio(ref_audio_path, text, language):
     """Generate speech by cloning from a reference audio file directly.
     Used during clone profile creation to generate the preview sample.
     Returns (list_of_floats, sample_rate).
@@ -251,9 +268,9 @@ def voice_clone_from_audio(ref_audio_path, text, language, quantization="bf16"):
     backend = detect_backend()
     # MLX voice cloning uses Base model with ref_audio (ICL), not CustomVoice
     if backend == "mlx":
-        model = load_base_model(quantization=quantization)
+        model = load_base_model()
     else:
-        model = load_custom_voice_model(quantization=quantization)
+        model = load_custom_voice_model()
     with _suppress_output():
         if backend == "mlx":
             results = list(model.generate(
@@ -279,10 +296,9 @@ def is_model_loaded(model_type):
     return model_type in _models
 
 
-def ensure_model(model_type, quantization="bf16"):
+def ensure_model(model_type):
     """Load a model by type name if not already cached.
     model_type: 'design', 'base', or 'custom'
-    quantization: 'bf16' or '8bit' (MLX only, ignored for PyTorch)
     Returns True if the model was already loaded, False if it had to be loaded now.
     For MLX, 'custom' loads the base model (MLX voice cloning uses Base, not CustomVoice).
     """
@@ -291,14 +307,13 @@ def ensure_model(model_type, quantization="bf16"):
     effective_type = model_type
     if model_type == "custom" and backend == "mlx":
         effective_type = "base"
-    cache_key = f"{effective_type}_{quantization}"
-    was_loaded = cache_key in _models
+    was_loaded = effective_type in _models
     if effective_type == "design":
-        load_design_model(quantization=quantization)
+        load_design_model()
     elif effective_type == "base":
-        load_base_model(quantization=quantization)
+        load_base_model()
     elif effective_type == "custom":
-        load_custom_voice_model(quantization=quantization)
+        load_custom_voice_model()
     else:
         raise ValueError(f"Unknown model type: {model_type}")
     return was_loaded

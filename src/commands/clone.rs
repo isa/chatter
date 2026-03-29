@@ -8,6 +8,7 @@ use owo_colors::Style;
 
 use crate::audio;
 use crate::bridge::inference as bridge;
+use crate::bridge::model::ModelQuantization;
 use crate::cli::{CloneArgs, GlobalArgs, Language};
 use crate::profile::storage::{self, PREVIEW_SENTENCE};
 use crate::profile::{AudioInfo, ProfileInfo, ProfileMetadata, ProfileType};
@@ -35,6 +36,7 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     validate_audio_file(&args.audio_file)?;
 
     let language_str = language_to_string(&global.language);
+    let quant_override = args.variant.map(ModelQuantization::from);
 
     // Use system temp dir for previews during the clone loop
     let temp_dir = std::env::temp_dir().join("chatter-preview");
@@ -49,13 +51,13 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         // First attempt: load model without spinner so Python's download/checkpoint
         // progress shows through. Subsequent attempts: model is cached, use spinner.
         if attempt == 1 {
-            let _was_cached = bridge::ensure_model_loaded("custom")
+            let _was_cached = bridge::ensure_model_loaded("custom", quant_override)
                 .map_err(|e| anyhow::anyhow!(e).context("Failed to load speech model"))?;
         }
 
         let spinner = ui::create_spinner("Cloning voice from reference audio...");
         let result =
-            bridge::voice_clone_from_audio(&args.audio_file, PREVIEW_SENTENCE, &language_str);
+            bridge::voice_clone_from_audio(&args.audio_file, PREVIEW_SENTENCE, &language_str, quant_override);
 
         let (wav, sr) = match result {
             Ok(data) => {
@@ -144,7 +146,7 @@ pub fn run(args: CloneArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     // Save clone prompt + reference audio + sample MP3
     let spinner = ui::create_spinner("Saving voice profile...");
 
-    bridge::create_and_save_clone_prompt(&args.audio_file, PREVIEW_SENTENCE, &profile_dir)
+    bridge::create_and_save_clone_prompt(&args.audio_file, PREVIEW_SENTENCE, &profile_dir, quant_override)
         .map_err(|e| anyhow::anyhow!(e).context("Failed to save clone prompt"))?;
 
     // Save WAV to profile dir (needed for MLX which uses ref_audio directly)

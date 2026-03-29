@@ -1,11 +1,8 @@
-use std::collections::HashSet;
-
 use owo_colors::{OwoColorize, Stream};
 use pyo3::prelude::*;
 
 use crate::bridge;
 use crate::bridge::doctor::get_system_info;
-use crate::bridge::model;
 use crate::bridge::runtime::ComputeBackend;
 use crate::cli::{DoctorArgs, GlobalArgs};
 use crate::ui;
@@ -134,119 +131,18 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             }
         }
 
-        // Models — check expected variants for active backend
+        // Models
         match bridge::list_cached_models() {
-            Ok(cached_models) => {
-                let cached_ids: HashSet<String> =
-                    cached_models.iter().map(|m| m.repo_id.clone()).collect();
-
-                // Detect quantization variant for display
-                let quant_label = info.backend.as_ref()
-                    .and_then(|b| bridge::detect_cached_quantization(b).ok())
-                    .map(|q| q.label())
-                    .unwrap_or("bf16");
-
-                if let Some(backend) = &info.backend {
-                    let quant = bridge::detect_cached_quantization(backend)
-                        .unwrap_or(bridge::ModelQuantization::Bf16);
-                    let expected = model::model_variants(backend, quant);
-                    let mut present: Vec<&String> = Vec::new();
-                    let mut missing: Vec<&String> = Vec::new();
-
-                    for variant in &expected {
-                        if cached_ids.contains(variant) {
-                            present.push(variant);
-                        } else {
-                            missing.push(variant);
-                        }
-                    }
-
-                    if missing.is_empty() {
-                        // All expected variants are cached
-                        let total_bytes: u64 = cached_models
-                            .iter()
-                            .filter(|m| expected.contains(&m.repo_id))
-                            .filter_map(|m| m.size_bytes)
-                            .sum();
-                        let total_gb = total_bytes as f64 / 1_073_741_824.0;
-                        ui::doctor_pass(
-                            "Models",
-                            &format!(
-                                "{}/{} for active backend, {quant_label} ({total_gb:.1} GB)",
-                                present.len(),
-                                expected.len()
-                            ),
-                        );
-                        passes += 1;
-                    } else if !present.is_empty() {
-                        // Some but not all expected variants cached
-                        let missing_names: Vec<String> = missing
-                            .iter()
-                            .map(|id| {
-                                id.rsplit('/')
-                                    .next()
-                                    .unwrap_or(id)
-                                    .to_string()
-                            })
-                            .collect();
-                        ui::doctor_warn(
-                            "Models",
-                            &format!(
-                                "{}/{} for active backend ({quant_label}) — missing: {}",
-                                present.len(),
-                                expected.len(),
-                                missing_names.join(", ")
-                            ),
-                        );
-                        fails += 1;
-                        models_missing = true;
-                    } else {
-                        // None of the expected variants cached
-                        ui::doctor_fail(
-                            "Models",
-                            "not downloaded — run: chatter model download",
-                        );
-                        fails += 1;
-                        models_missing = true;
-                    }
-
-                    // Verbose: per-model status
-                    if global.verbose {
-                        for variant in &expected {
-                            let short_name =
-                                variant.rsplit('/').next().unwrap_or(variant);
-                            if cached_ids.contains(variant) {
-                                println!("      \u{2713} {short_name}");
-                            } else {
-                                println!("      \u{2717} {short_name}");
-                            }
-                        }
-                    }
-                } else {
-                    // No backend detected — fall back to counting all cached models
-                    if !cached_models.is_empty() {
-                        let total_bytes: u64 =
-                            cached_models.iter().filter_map(|m| m.size_bytes).sum();
-                        let total_gb = total_bytes as f64 / 1_073_741_824.0;
-                        ui::doctor_pass(
-                            "Models",
-                            &format!(
-                                "{} downloaded ({total_gb:.1} GB)",
-                                cached_models.len()
-                            ),
-                        );
-                        passes += 1;
-                    } else {
-                        ui::doctor_fail(
-                            "Models",
-                            "not downloaded — run: chatter model download",
-                        );
-                        fails += 1;
-                        models_missing = true;
-                    }
-                }
+            Ok(models) if !models.is_empty() => {
+                let total_bytes: u64 = models.iter().filter_map(|m| m.size_bytes).sum();
+                let total_gb = total_bytes as f64 / 1_073_741_824.0;
+                ui::doctor_pass(
+                    "Models",
+                    &format!("{} downloaded ({total_gb:.1} GB)", models.len()),
+                );
+                passes += 1;
             }
-            Err(_) => {
+            _ => {
                 ui::doctor_fail(
                     "Models",
                     "not downloaded — run: chatter model download",
@@ -311,7 +207,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         println!();
         println!("Downloading models...");
         let spinner = ui::create_spinner("Downloading Qwen3-TTS 1.7B models");
-        match bridge::download_model(bridge::ModelQuantization::Bf16) {
+        match bridge::download_model(&bridge::ModelQuantization::EightBit) {
             Ok(()) => {
                 spinner.finish_with_message("Models downloaded");
                 println!();
