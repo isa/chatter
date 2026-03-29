@@ -1,59 +1,17 @@
 """
-chatter_bridge.py -- Python adapter normalizing qwen-tts and mlx-audio APIs.
+chatter_bridge.engines.qwen -- Qwen3-TTS engine implementation.
 
-Called from Rust via PyO3. All functions return Python lists (not numpy arrays)
-and ensure data is on CPU before returning to Rust.
+Extracted from the original monolithic chatter_bridge.py. Contains all
+Qwen3-TTS / MLX-audio model loading, inference, and backend detection logic.
 """
 import sys
 import os
-import contextlib
-import warnings
+import numpy as np
+
+from chatter_bridge import _suppress_output, _suppress_warnings_only
 
 _backend_cache = None
 _models = {}
-
-
-@contextlib.contextmanager
-def _suppress_output():
-    """Suppress stdout/stderr from noisy Python libraries during inference.
-
-    Captures all output to devnull so it doesn't fight with Rust's indicatif spinner.
-    Only used around inference calls -- model loading lets output through so users
-    see download progress and checkpoint loading status.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        try:
-            sys.stdout = open(os.devnull, "w")
-            sys.stderr = open(os.devnull, "w")
-            yield
-        finally:
-            sys.stdout.close()
-            sys.stderr.close()
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
-
-
-@contextlib.contextmanager
-def _suppress_warnings_only():
-    """Suppress Python warnings but let stdout/stderr through.
-
-    Used during model loading so HF download progress and checkpoint loading
-    messages are visible, while noisy warnings (flash-attn, deprecation) are hidden.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        # Suppress only stdout (import chatter, library banners) but keep stderr
-        # so that tqdm/HF progress bars (which write to stderr) are visible.
-        old_stdout = sys.stdout
-        try:
-            sys.stdout = open(os.devnull, "w")
-            yield
-        finally:
-            sys.stdout.close()
-            sys.stdout = old_stdout
 
 
 def detect_backend():
@@ -167,7 +125,6 @@ def load_custom_voice_model():
 
 def voice_design(text, language, instruct):
     """Run VoiceDesign inference. Returns (list_of_floats, sample_rate)."""
-    import numpy as np
     model = load_design_model()
     backend = detect_backend()
     with _suppress_output():
@@ -226,7 +183,6 @@ def generate_speech(text, language, profile_dir, ref_text="", temperature=0.7, r
     temperature and repetition_penalty control pacing (lower temp = more natural pauses).
     Returns (list_of_floats, sample_rate).
     """
-    import numpy as np
     backend = detect_backend()
     with _suppress_output():
         if backend == "mlx":
@@ -264,7 +220,6 @@ def voice_clone_from_audio(ref_audio_path, text, language):
     Used during clone profile creation to generate the preview sample.
     Returns (list_of_floats, sample_rate).
     """
-    import numpy as np
     backend = detect_backend()
     # MLX voice cloning uses Base model with ref_audio (ICL), not CustomVoice
     if backend == "mlx":
