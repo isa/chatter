@@ -2,7 +2,7 @@ class Chatter < Formula
   desc "Text-to-speech from the terminal, powered by Qwen3-TTS"
   homepage "https://github.com/isa/chatter"
   license "MIT"
-  version "0.1.0"
+  version "1.0.0"
 
   # For local testing, point to a tarball. For real releases, use a GitHub URL:
   #   url "https://github.com/isa/chatter/archive/refs/tags/v#{version}.tar.gz"

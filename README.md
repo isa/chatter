@@ -2,6 +2,32 @@
 
 A Rust CLI tool that wraps [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) to provide text-to-speech with voice profile management. Design custom voices from natural language descriptions, clone voices from audio samples, and generate speech from text or documents — all from the terminal.
 
+## Why chatter?
+
+You have a 40-page PDF you need to review but no time to sit and read it. Drop it into chatter, pick a voice you like, and listen on your commute, during a workout, or while cooking dinner.
+
+**Turn any document into a podcast.** PDFs, Word docs, Markdown notes — chatter chunks them intelligently and generates natural-sounding speech with proper pacing between sections.
+
+**Your voice, your way.** Design a voice from a description ("a calm British narrator in his 50s") or clone one from a short audio clip. Save it as a profile and reuse it across everything you generate.
+
+**Fits into your workflow.** chatter is a CLI tool, which means it composes with everything:
+
+```sh
+# Convert a doc and listen while you work
+chatter generate --file report.pdf --profile narrator --no-play -o report.mp3
+
+# Batch-convert a folder of markdown notes
+for f in notes/*.md; do chatter generate --file "$f" --profile narrator -o "${f%.md}.mp3"; done
+
+# Pipe text from another command
+pbpaste | chatter generate --profile narrator -o clipboard.mp3
+
+# macOS Shortcut: speak selected text from any app
+# Create a Shortcut that runs: chatter generate "$selected_text" --profile narrator
+```
+
+**Runs locally.** No cloud API, no subscription, no data leaving your machine. Your documents stay private.
+
 ## Features
 
 - **Voice Design** — Create voice profiles from natural language descriptions (e.g., "a warm, deep male voice with a slight British accent")
@@ -19,19 +45,18 @@ brew install chatter
 
 Homebrew installs everything: the binary, a bundled Python venv with the correct inference backend (`mlx-audio` on Apple Silicon, `qwen-tts` on CUDA), and all Python dependencies. No manual setup needed.
 
-> **Heads up:** The Python dependencies are large. `mlx-audio` (Apple Silicon) pulls ~149 GB of packages including PyTorch and MLX frameworks. `qwen-tts` (CUDA) is similarly heavy. The initial `brew install` will take a while — grab a coffee.
-
 After installing, download the TTS models:
 
 ```sh
-chatter model download
+chatter model download                   # 8-bit (default, ~6 GB total)
+chatter model download --variant bf16    # full precision (~12 GB total)
 ```
 
 ### Requirements
 
 - **Python** 3.12+ (installed automatically by Homebrew as a dependency)
 - **GPU** — Apple Silicon (MLX) or CUDA-capable GPU
-- **Disk** — ~12 GB for all three 1.7B model variants
+- **Disk** — ~6 GB for 8-bit models (default) or ~12 GB for bf16
 
 ## Usage
 
@@ -108,13 +133,15 @@ Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, R
 
 ## Model Variants
 
-| Model | Size | Use Case |
-|-------|------|----------|
-| Qwen3-TTS 1.7B VoiceDesign | ~3.4 GB | Voice design from descriptions |
-| Qwen3-TTS 1.7B CustomVoice | ~3.4 GB | Speech generation with saved profiles |
-| Qwen3-TTS 1.7B Base | ~3.4 GB | Voice cloning |
+Downloads default to 8-bit quantized models (smaller, faster). Use `--variant bf16` for full precision.
 
-On Apple Silicon, the MLX-optimized variants (`mlx-community/Qwen3-TTS-*-bf16`) are used automatically for better performance.
+| Model | 8-bit | bf16 | Use Case |
+|-------|-------|------|----------|
+| Qwen3-TTS 1.7B VoiceDesign | ~1.7 GB | ~3.4 GB | Voice design from descriptions |
+| Qwen3-TTS 1.7B CustomVoice | ~1.7 GB | ~3.4 GB | Speech generation with saved profiles |
+| Qwen3-TTS 1.7B Base | ~1.7 GB | ~3.4 GB | Voice cloning |
+
+On Apple Silicon, MLX-optimized variants are used automatically. Override at inference time with `--variant bf16` if needed.
 
 ## Development
 
