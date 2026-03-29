@@ -31,8 +31,8 @@ class Chatter < Formula
     # Determine which TTS backend to install based on platform
     pip = venv/"bin/pip"
     if Hardware::CPU.arm? && OS.mac?
-      # Apple Silicon: use mlx-audio for optimized Metal inference
-      system pip, "install", "--no-cache-dir", "mlx-audio"
+      # Apple Silicon: use mlx-audio for optimized Metal inference (pinned deps)
+      system pip, "install", "--no-cache-dir", "--quiet", "--only-binary", ":all:", "-r", buildpath/"requirements-mlx.txt"
     else
       # CUDA or CPU fallback: use qwen-tts
       system pip, "install", "--no-cache-dir", "qwen-tts"
@@ -47,9 +47,13 @@ class Chatter < Formula
 
   def caveats
     <<~EOS
-      After installing, download the TTS models (~12 GB total):
+      After installing, download the TTS models (8bit by default, ~6 GB):
 
         chatter model download
+
+      For higher quality (bf16, ~12 GB):
+
+        chatter model download --variant bf16
 
       Run `chatter doctor` to verify your setup.
     EOS
