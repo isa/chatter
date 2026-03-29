@@ -37,6 +37,10 @@ pub struct ModelInfo {
     pub size_label: String,
     pub local_path: Option<String>,
     pub size_bytes: Option<u64>,
+    /// Engine this model belongs to: "qwen" or "chatterbox".
+    pub engine: String,
+    /// Human-readable variant label for ChatterBox models (e.g. "Original", "Turbo").
+    pub variant_label: Option<String>,
 }
 
 /// All Qwen3-TTS 1.7B model variants.
@@ -103,6 +107,44 @@ fn import_hf_hub(py: Python<'_>) -> Result<Bound<'_, PyModule>, BridgeError> {
     }
 }
 
+/// Derive a human-readable variant label from a ChatterBox repo ID.
+fn chatterbox_variant_label(repo_id: &str) -> Option<String> {
+    if repo_id == "ResembleAI/chatterbox" {
+        Some("Original".to_string())
+    } else if repo_id.contains("chatterbox-turbo") {
+        Some("Turbo".to_string())
+    } else if repo_id.contains("chatterbox") && repo_id.contains("multilingual") {
+        Some("Multilingual".to_string())
+    } else if repo_id.contains("chatterbox") {
+        Some("ChatterBox".to_string())
+    } else {
+        None
+    }
+}
+
+/// Check available disk space and return estimated download size for ChatterBox models.
+///
+/// Returns `(free_bytes, estimated_download_bytes)`.
+/// Estimated ChatterBox total size is approximately 20 GB for all 3 variants.
+pub fn disk_space_check() -> Result<(u64, u64), BridgeError> {
+    let estimated: u64 = 20_000_000_000;
+    let free = Python::attach(|py| -> Result<u64, BridgeError> {
+        let shutil = py.import("shutil").map_err(|e| {
+            BridgeError::Other(format!("Failed to check disk space: {e}"))
+        })?;
+        let usage = shutil.call_method1("disk_usage", ("/",)).map_err(|e| {
+            BridgeError::Other(format!("Failed to check disk space: {e}"))
+        })?;
+        let free_bytes: u64 = usage.getattr("free").map_err(|e| {
+            BridgeError::Other(format!("Failed to check disk space: {e}"))
+        })?.extract().map_err(|e| {
+            BridgeError::Other(format!("Failed to check disk space: {e}"))
+        })?;
+        Ok(free_bytes)
+    })?;
+    Ok((free, estimated))
+}
+
 /// Download all 1.7B model variants from HuggingFace.
 ///
 /// Detects the compute backend to choose PyTorch or MLX variants.
@@ -144,9 +186,11 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
             let repo: Bound<'_, PyAny> = repo?;
             let repo_id: String = repo.getattr("repo_id")?.extract()?;
 
-            if !repo_id.starts_with("Qwen/Qwen3-TTS-12Hz-")
-                && !repo_id.starts_with("mlx-community/Qwen3-TTS-12Hz-")
-            {
+            let is_qwen = repo_id.starts_with("Qwen/Qwen3-TTS-12Hz-")
+                || repo_id.starts_with("mlx-community/Qwen3-TTS-12Hz-");
+            let is_chatterbox = repo_id.contains("chatterbox");
+
+            if !is_qwen && !is_chatterbox {
                 continue;
             }
 
@@ -157,7 +201,13 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
             let label = if repo_id.contains("1.7B") {
                 "1.7B"
             } else {
-                "unknown"
+                "-"
+            };
+
+            let (engine, variant_label) = if is_chatterbox {
+                ("chatterbox".to_string(), chatterbox_variant_label(&repo_id))
+            } else {
+                ("qwen".to_string(), None)
             };
 
             models.push(ModelInfo {
@@ -165,6 +215,8 @@ pub fn list_cached_models() -> Result<Vec<ModelInfo>, BridgeError> {
                 size_label: label.to_string(),
                 local_path: Some(repo_path),
                 size_bytes: Some(size_on_disk),
+                engine,
+                variant_label,
             });
         }
 
