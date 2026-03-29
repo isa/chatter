@@ -196,6 +196,7 @@ dependencies = [
  "directories",
  "hound",
  "indicatif",
+ "libc",
  "mp3lame-encoder",
  "owo-colors",
  "pdf-extract",

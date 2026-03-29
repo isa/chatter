@@ -29,44 +29,67 @@ pub fn play_audio(path: &Path) -> anyhow::Result<()> {
 /// - The playback to finish naturally, or
 /// - The user to press any key (kills the player process)
 ///
-/// Uses `console::Term` to read from /dev/tty instead of stdin.
-/// This prevents orphaned reader threads from blocking stdin for
-/// subsequent interactive prompts (e.g. dialoguer::Select).
-///
-/// Returns Ok(()) in both cases.
+/// Uses a single-threaded approach: opens /dev/tty directly, puts it in
+/// raw mode, and polls for input with a timeout. No orphaned threads that
+/// could corrupt terminal state across multiple calls.
 pub fn play_audio_skippable(path: &Path) -> anyhow::Result<()> {
+    use std::fs::File;
+    use std::io::Read;
+    use std::os::unix::io::AsRawFd;
+
     let cmd = player_cmd();
     let mut child = Command::new(cmd)
         .arg(path)
         .spawn()
         .with_context(|| format!("Failed to start audio player ({cmd})"))?;
 
-    // Read from /dev/tty via console::Term -- NOT stdin.
-    // Even if the reader thread outlives this function (playback finishes
-    // before a keypress), it blocks on /dev/tty which does NOT interfere
-    // with stdin-based dialoguer prompts.
-    let (tx, rx) = std::sync::mpsc::channel();
-    let term = console::Term::stderr();
-    std::thread::spawn(move || {
-        let _ = term.read_key();
-        let _ = tx.send(());
-    });
+    // Open /dev/tty directly for key detection
+    let tty = File::open("/dev/tty").context("Failed to open /dev/tty")?;
+    let fd = tty.as_raw_fd();
 
-    // Poll: check if child exited or user pressed a key
+    // Save original terminal settings and switch to raw mode
+    let original_termios = unsafe {
+        let mut termios = std::mem::zeroed::<libc::termios>();
+        libc::tcgetattr(fd, &mut termios);
+        termios
+    };
+
+    let mut raw = original_termios;
+    // Disable canonical mode and echo — read keys immediately without waiting for Enter
+    raw.c_lflag &= !(libc::ICANON | libc::ECHO);
+    raw.c_cc[libc::VMIN] = 0;  // non-blocking
+    raw.c_cc[libc::VTIME] = 0; // no timeout
+    unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw) };
+
+    // Poll loop: check child process and tty for input
+    let mut buf = [0u8; 8];
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => break, // playback finished
-            Ok(None) => {}        // still playing
-            Err(_) => break,      // error, stop
+            Ok(Some(_)) => break,
+            Ok(None) => {}
+            Err(_) => break,
         }
-        if rx.try_recv().is_ok() {
-            // User pressed a key -- kill the player
+
+        // Poll /dev/tty with a 50ms timeout
+        let mut pollfd = libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let ready = unsafe { libc::poll(&mut pollfd, 1, 50) };
+        if ready > 0 && (pollfd.revents & libc::POLLIN) != 0 {
+            // Drain the input buffer
+            let tty_ref = &tty;
+            let _ = (&*tty_ref).read(&mut buf);
+            // Kill the player
             let _ = child.kill();
             let _ = child.wait();
             break;
         }
-        std::thread::sleep(std::time::Duration::from_millis(50));
     }
+
+    // Restore original terminal settings — critical for dialoguer to work
+    unsafe { libc::tcsetattr(fd, libc::TCSANOW, &original_termios) };
 
     Ok(())
 }
