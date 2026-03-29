@@ -53,8 +53,8 @@
 | CB-02 | Phase 06 | Done |
 | CB-03 | Phase 06 | Done |
 | CB-04 | Phase 06 | Done |
-| MDL-01 | Phase 07 | Complete |
-| MDL-02 | Phase 07 | Pending |
-| MDL-03 | Phase 07 | Complete |
+| MDL-01 | Phase 07 | Done |
+| MDL-02 | Phase 07 | Done |
+| MDL-03 | Phase 07 | Done |
 | FT-01 | Phase 08 | Pending |
 | FT-02 | Phase 08 | Pending |
