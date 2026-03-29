@@ -1,4 +1,3 @@
-use std::io::BufRead;
 use std::path::Path;
 use std::process::Command;
 
@@ -24,11 +23,15 @@ pub fn play_audio(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Play an audio file in the background, skippable by pressing Enter.
+/// Play an audio file in the background, skippable by pressing any key.
 ///
 /// Spawns the player as a child process and waits for either:
 /// - The playback to finish naturally, or
-/// - The user to press Enter (kills the player process)
+/// - The user to press any key (kills the player process)
+///
+/// Uses `console::Term` to read from /dev/tty instead of stdin.
+/// This prevents orphaned reader threads from blocking stdin for
+/// subsequent interactive prompts (e.g. dialoguer::Select).
 ///
 /// Returns Ok(()) in both cases.
 pub fn play_audio_skippable(path: &Path) -> anyhow::Result<()> {
@@ -38,16 +41,18 @@ pub fn play_audio_skippable(path: &Path) -> anyhow::Result<()> {
         .spawn()
         .with_context(|| format!("Failed to start audio player ({cmd})"))?;
 
-    // Spawn a thread to wait for Enter key
+    // Read from /dev/tty via console::Term -- NOT stdin.
+    // Even if the reader thread outlives this function (playback finishes
+    // before a keypress), it blocks on /dev/tty which does NOT interfere
+    // with stdin-based dialoguer prompts.
     let (tx, rx) = std::sync::mpsc::channel();
+    let term = console::Term::stderr();
     std::thread::spawn(move || {
-        let stdin = std::io::stdin();
-        let mut line = String::new();
-        let _ = stdin.lock().read_line(&mut line);
+        let _ = term.read_key();
         let _ = tx.send(());
     });
 
-    // Poll: check if child exited or user pressed Enter
+    // Poll: check if child exited or user pressed a key
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break, // playback finished
@@ -55,7 +60,7 @@ pub fn play_audio_skippable(path: &Path) -> anyhow::Result<()> {
             Err(_) => break,      // error, stop
         }
         if rx.try_recv().is_ok() {
-            // User pressed Enter — kill the player
+            // User pressed a key -- kill the player
             let _ = child.kill();
             let _ = child.wait();
             break;
