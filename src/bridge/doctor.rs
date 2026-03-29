@@ -12,6 +12,10 @@ pub struct SystemInfo {
     pub disk_free_gb: Option<f64>,
     pub hf_cache_path: Option<String>,
     pub hf_cache_size_gb: Option<f64>,
+    /// The installed version of the `chatterbox-tts` package, or None if not installed.
+    pub chatterbox_pkg_version: Option<String>,
+    /// Whether the ChatterBox package is importable.
+    pub chatterbox_installed: bool,
 }
 
 /// Gather system information for the doctor command.
@@ -41,6 +45,10 @@ pub fn get_system_info() -> SystemInfo {
 
         let (disk_free_gb, hf_cache_path, hf_cache_size_gb) = get_disk_info(py);
 
+        // Check ChatterBox installation via package metadata (lightweight, no heavy import)
+        let chatterbox_pkg_version = get_package_version(py, "chatterbox-tts");
+        let chatterbox_installed = chatterbox_pkg_version.is_some();
+
         SystemInfo {
             python_version,
             backend,
@@ -49,6 +57,8 @@ pub fn get_system_info() -> SystemInfo {
             disk_free_gb,
             hf_cache_path,
             hf_cache_size_gb,
+            chatterbox_pkg_version,
+            chatterbox_installed,
         }
     })
 }

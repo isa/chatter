@@ -16,6 +16,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let mut passes = 0u32;
     let mut fails = 0u32;
     let mut models_missing = false;
+    let mut cb_models_missing = false;
 
     // Venv
     let diagnosis = bridge::diagnose_venv();
@@ -131,20 +132,29 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             }
         }
 
-        // Models
+        // --- Qwen3-TTS section ---
+        println!();
+        println!(
+            "  {}",
+            "Qwen3-TTS"
+                .if_supports_color(Stream::Stdout, |t| t.bold().to_string())
+                .to_string()
+        );
+
+        // Qwen Models
         match bridge::list_cached_models() {
             Ok(models) if !models.is_empty() => {
                 let total_bytes: u64 = models.iter().filter_map(|m| m.size_bytes).sum();
                 let total_gb = total_bytes as f64 / 1_073_741_824.0;
                 ui::doctor_pass(
-                    "Models",
+                    "Qwen Models",
                     &format!("{} downloaded ({total_gb:.1} GB)", models.len()),
                 );
                 passes += 1;
             }
             _ => {
                 ui::doctor_fail(
-                    "Models",
+                    "Qwen Models",
                     "not downloaded — run: chatter model download",
                 );
                 fails += 1;
@@ -152,13 +162,57 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             }
         }
 
+        // --- ChatterBox section ---
+        println!();
+        println!(
+            "  {}",
+            "ChatterBox"
+                .if_supports_color(Stream::Stdout, |t| t.bold().to_string())
+                .to_string()
+        );
+
+        // ChatterBox package
+        if info.chatterbox_installed {
+            let version = info
+                .chatterbox_pkg_version
+                .as_deref()
+                .unwrap_or("unknown");
+            ui::doctor_pass("chatterbox-tts", version);
+            passes += 1;
+        } else {
+            ui::doctor_warn(
+                "chatterbox-tts",
+                "not installed (optional — install with: chatter model download --engine chatterbox)",
+            );
+        }
+
+        // ChatterBox models (only check if chatterbox is installed)
+        if info.chatterbox_installed {
+            match bridge::list_cached_chatterbox_models() {
+                Ok(models) if !models.is_empty() => {
+                    let total_bytes: u64 = models.iter().filter_map(|m| m.size_bytes).sum();
+                    let total_gb = total_bytes as f64 / 1_073_741_824.0;
+                    ui::doctor_pass(
+                        "CB Models",
+                        &format!("{} downloaded ({total_gb:.1} GB)", models.len()),
+                    );
+                    passes += 1;
+                }
+                _ => {
+                    ui::doctor_warn(
+                        "CB Models",
+                        "not downloaded — run: chatter model download --engine chatterbox",
+                    );
+                    cb_models_missing = true;
+                }
+            }
+        }
+
         // HF Cache / Disk
         if let Some(path) = &info.hf_cache_path {
             if let Some(size_gb) = info.hf_cache_size_gb {
                 if size_gb > 0.01 {
-                    println!(
-                        "    Model cache: {path} ({size_gb:.1} GB)",
-                    );
+                    println!("    Model cache: {path} ({size_gb:.1} GB)",);
                 }
             }
         }
@@ -195,32 +249,72 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             .to_string();
         println!("{colored_msg}");
 
-        if models_missing && !args.fix {
+        if !args.fix && (models_missing || cb_models_missing) {
             println!();
-            println!("To download models:  chatter model download");
-            println!("To auto-fix all:     chatter doctor --fix");
+            if models_missing {
+                println!("To download Qwen models:       chatter model download");
+            }
+            if cb_models_missing {
+                println!("To download ChatterBox models:  chatter model download --engine chatterbox");
+            }
+            println!("To auto-fix all:                chatter doctor --fix");
         }
     }
 
     // --fix: auto-download models if missing
-    if args.fix && models_missing && venv_ok {
-        println!();
-        println!("Downloading models...");
-        let spinner = ui::create_spinner("Downloading Qwen3-TTS 1.7B models");
-        match bridge::download_model(&bridge::ModelQuantization::EightBit) {
-            Ok(()) => {
-                spinner.finish_with_message("Models downloaded");
-                println!();
-                let msg = "Fixed! All models downloaded."
-                    .if_supports_color(Stream::Stdout, |t| t.green().to_string())
-                    .to_string();
-                println!("{msg}");
-            }
-            Err(e) => {
-                spinner.abandon_with_message("Download failed");
-                return Err(anyhow::anyhow!(e).context("Model download failed"));
+    if args.fix && venv_ok {
+        // Fix Qwen models
+        if models_missing {
+            println!();
+            println!("Downloading Qwen models...");
+            let spinner = ui::create_spinner("Downloading Qwen3-TTS 1.7B models");
+            match bridge::download_model(&bridge::ModelQuantization::EightBit) {
+                Ok(()) => {
+                    spinner.finish_with_message("Qwen models downloaded");
+                }
+                Err(e) => {
+                    spinner.abandon_with_message("Download failed");
+                    return Err(anyhow::anyhow!(e).context("Qwen model download failed"));
+                }
             }
         }
+
+        // Fix ChatterBox: install deps + download models
+        // ChatterBox is optional, so errors are warnings, not hard failures.
+        if cb_models_missing || !get_system_info_chatterbox_installed() {
+            println!();
+            if !get_system_info_chatterbox_installed() {
+                println!("Installing ChatterBox (first time setup)...");
+            } else {
+                println!("Downloading ChatterBox models...");
+            }
+
+            // Install ChatterBox deps via pip in the venv
+            let spinner = ui::create_spinner("Installing ChatterBox dependencies");
+            match install_chatterbox_via_pip() {
+                Ok(()) => {
+                    spinner.finish_with_message("ChatterBox dependencies installed");
+                }
+                Err(e) => {
+                    spinner.abandon_with_message("ChatterBox install failed");
+                    let warn = "Warning:"
+                        .if_supports_color(Stream::Stdout, |t| t.yellow().to_string())
+                        .to_string();
+                    println!(
+                        "{warn} ChatterBox installation failed (optional): {e}"
+                    );
+                    println!(
+                        "You can install manually: pip install chatterbox-tts"
+                    );
+                }
+            }
+        }
+
+        println!();
+        let msg = "Fix complete."
+            .if_supports_color(Stream::Stdout, |t| t.green().to_string())
+            .to_string();
+        println!("{msg}");
     }
 
     // Verbose output
@@ -244,4 +338,33 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
 
     println!();
     Ok(())
+}
+
+/// Quick check if chatterbox is installed (re-checks via Python metadata).
+fn get_system_info_chatterbox_installed() -> bool {
+    Python::attach(|py| {
+        let metadata = py.import("importlib.metadata").ok();
+        metadata
+            .and_then(|m| m.call_method1("version", ("chatterbox-tts",)).ok())
+            .is_some()
+    })
+}
+
+/// Install chatterbox-tts into the managed venv via pip.
+fn install_chatterbox_via_pip() -> Result<(), anyhow::Error> {
+    let venv = bridge::venv_path().map_err(|e| anyhow::anyhow!(e))?;
+    let pip = venv.join("bin").join("pip");
+    let output = std::process::Command::new(&pip)
+        .args(["install", "chatterbox-tts"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to run pip: {e}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(anyhow::anyhow!("pip install failed: {stderr}"))
+    }
 }
