@@ -45,7 +45,4 @@ pub enum BridgeError {
 
     #[error("Inference backend not available: {0}")]
     BackendNotAvailable(String),
-
-    #[error("ChatterBox is not installed. Run:\n  chatter model download --engine chatterbox\nto install ChatterBox models and dependencies.")]
-    ChatterBoxNotInstalled,
 }

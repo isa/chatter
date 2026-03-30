@@ -283,23 +283,6 @@ pub fn install_chatterbox_deps() -> Result<(), BridgeError> {
     Ok(())
 }
 
-/// Check if ChatterBox TTS is installed in the managed venv.
-pub fn is_chatterbox_installed() -> bool {
-    let Ok(venv) = venv_path() else {
-        return false;
-    };
-    let python = venv_python_path(&venv);
-    if !python.exists() {
-        return false;
-    }
-    let output = Command::new(&python)
-        .args(["-c", "import chatterbox"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .output();
-    matches!(output, Ok(o) if o.status.success())
-}
-
 /// Configure the Python runtime to use the venv's packages.
 ///
 /// Must be called BEFORE any PyO3 operations. Sets up:

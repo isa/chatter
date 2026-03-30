@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -131,20 +132,29 @@ pub fn run(args: GenerateArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     let profile_engine = &profile.profile.engine;
     let cli_engine = global.engine.as_str();
     if profile_engine != cli_engine {
-        eprintln!(
-            "Profile '{}' was created with {} engine but you specified --engine {}.",
-            args.profile, profile_engine, cli_engine
-        );
-        eprint!("Switch to {}? [y/N] ", profile_engine);
-        std::io::Write::flush(&mut std::io::stderr())?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        if input.trim().eq_ignore_ascii_case("y") {
-            // Re-set the engine in the Python bridge to match the profile
-            inference::set_engine(profile_engine)
-                .map_err(|e| anyhow::anyhow!(e).context("Failed to switch engine"))?;
+        if std::io::stdin().is_terminal() {
+            // Interactive terminal: offer to switch engine
+            eprintln!(
+                "Profile '{}' was created with {} engine but you specified --engine {}.",
+                args.profile, profile_engine, cli_engine
+            );
+            eprint!("Switch to {}? [y/N] ", profile_engine);
+            std::io::Write::flush(&mut std::io::stderr())?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            if input.trim().eq_ignore_ascii_case("y") {
+                // Re-set the engine in the Python bridge to match the profile
+                inference::set_engine(profile_engine)
+                    .map_err(|e| anyhow::anyhow!(e).context("Failed to switch engine"))?;
+            } else {
+                anyhow::bail!("Engine mismatch. Use --engine {} or choose a different profile.", profile_engine);
+            }
         } else {
-            anyhow::bail!("Engine mismatch. Use --engine {} or choose a different profile.", profile_engine);
+            // Non-interactive (piped/CI): bail immediately with a clear error
+            anyhow::bail!(
+                "Engine mismatch: profile '{}' uses {} engine, but --engine {} was specified. Use --engine {} or choose a different profile.",
+                args.profile, profile_engine, cli_engine, profile_engine
+            );
         }
     }
 
