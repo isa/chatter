@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 use crate::bridge;
 use crate::bridge::doctor::get_system_info;
 use crate::bridge::runtime::ComputeBackend;
+use crate::bridge::venv::install_chatterbox_deps;
 use crate::cli::{DoctorArgs, GlobalArgs};
 use crate::ui;
 
@@ -212,15 +213,23 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
         if info.chatterbox_installed {
             match &info.backend {
                 Some(ComputeBackend::Mlx { .. }) => {
-                    println!("    CB hardware: MLX (Original + Turbo via mlx-community models)");
+                    ui::doctor_pass("CB Hardware", "MLX (Original + Turbo via mlx-community models)");
+                    passes += 1;
                 }
                 Some(ComputeBackend::Cuda { .. }) => {
-                    println!("    CB hardware: CUDA (all variants supported)");
+                    ui::doctor_pass("CB Hardware", "CUDA (all variants supported)");
+                    passes += 1;
                 }
                 Some(ComputeBackend::Mps) => {
-                    println!("    CB hardware: MPS (all variants supported)");
+                    ui::doctor_pass("CB Hardware", "MPS (all variants supported)");
+                    passes += 1;
                 }
-                _ => {}
+                Some(ComputeBackend::Cpu) => {
+                    ui::doctor_warn("CB Hardware", "no GPU — ChatterBox requires GPU acceleration");
+                }
+                None => {
+                    ui::doctor_warn("CB Hardware", "could not detect hardware");
+                }
             }
         }
 
@@ -279,6 +288,10 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
 
     // --fix: auto-download models if missing
     if args.fix && venv_ok {
+        let spinner = ui::create_spinner("Checking environment");
+        let info = get_system_info();
+        spinner.finish_and_clear();
+
         // Fix Qwen models
         if models_missing {
             println!();
@@ -297,17 +310,17 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
 
         // Fix ChatterBox: install deps + download models
         // ChatterBox is optional, so errors are warnings, not hard failures.
-        if cb_models_missing || !get_system_info_chatterbox_installed() {
+        if cb_models_missing || !info.chatterbox_installed {
             println!();
-            if !get_system_info_chatterbox_installed() {
+            if !info.chatterbox_installed {
                 println!("Installing ChatterBox (first time setup)...");
             } else {
                 println!("Downloading ChatterBox models...");
             }
 
-            // Install ChatterBox deps via pip in the venv
+            // Install ChatterBox deps via curated install pipeline
             let spinner = ui::create_spinner("Installing ChatterBox dependencies");
-            match install_chatterbox_via_pip() {
+            match install_chatterbox_deps() {
                 Ok(()) => {
                     spinner.finish_with_message("ChatterBox dependencies installed");
                 }
@@ -325,25 +338,23 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
                 }
             }
 
-            // Download ChatterBox models after deps are installed
-            if cb_models_missing {
-                let spinner = ui::create_spinner("Downloading ChatterBox models");
-                match bridge::model::download_model_chatterbox() {
-                    Ok(()) => {
-                        spinner.finish_with_message("ChatterBox models downloaded");
-                    }
-                    Err(e) => {
-                        spinner.abandon_with_message("ChatterBox model download failed");
-                        let warn = "Warning:"
-                            .if_supports_color(Stream::Stdout, |t| t.yellow().to_string())
-                            .to_string();
-                        println!(
-                            "{warn} ChatterBox model download failed (optional): {e}"
-                        );
-                        println!(
-                            "You can download manually: chatter model download --engine chatterbox"
-                        );
-                    }
+            // Always download ChatterBox models after successful install
+            let spinner = ui::create_spinner("Downloading ChatterBox models");
+            match bridge::model::download_model_chatterbox() {
+                Ok(()) => {
+                    spinner.finish_with_message("ChatterBox models downloaded");
+                }
+                Err(e) => {
+                    spinner.abandon_with_message("ChatterBox model download failed");
+                    let warn = "Warning:"
+                        .if_supports_color(Stream::Stdout, |t| t.yellow().to_string())
+                        .to_string();
+                    println!(
+                        "{warn} ChatterBox model download failed (optional): {e}"
+                    );
+                    println!(
+                        "You can download manually: chatter model download --engine chatterbox"
+                    );
                 }
             }
         }
@@ -378,31 +389,3 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Quick check if chatterbox is installed (re-checks via Python metadata).
-fn get_system_info_chatterbox_installed() -> bool {
-    Python::attach(|py| {
-        let metadata = py.import("importlib.metadata").ok();
-        metadata
-            .and_then(|m| m.call_method1("version", ("chatterbox-tts",)).ok())
-            .is_some()
-    })
-}
-
-/// Install chatterbox-tts into the managed venv via pip.
-fn install_chatterbox_via_pip() -> Result<(), anyhow::Error> {
-    let venv = bridge::venv_path().map_err(|e| anyhow::anyhow!(e))?;
-    let pip = venv.join("bin").join("pip");
-    let output = std::process::Command::new(&pip)
-        .args(["install", "chatterbox-tts"])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .map_err(|e| anyhow::anyhow!("Failed to run pip: {e}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(anyhow::anyhow!("pip install failed: {stderr}"))
-    }
-}
