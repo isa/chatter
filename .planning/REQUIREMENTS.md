@@ -46,15 +46,15 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENG-01 | Phase 05 | Pending |
-| ENG-02 | Phase 04 | Pending |
-| ENG-03 | Phase 05 | Pending |
+| ENG-01 | Phase 09 (code from Phase 06) | Complete |
+| ENG-02 | Phase 09 (code from Phase 06) | Complete |
+| ENG-03 | Phase 09 (code from Phase 06, needs TTY fix) | Complete |
 | CB-01 | Phase 06 | Done |
 | CB-02 | Phase 06 | Done |
 | CB-03 | Phase 06 | Done |
 | CB-04 | Phase 06 | Done |
 | MDL-01 | Phase 07 | Done |
-| MDL-02 | Phase 07 | Done |
+| MDL-02 | Phase 09 (partial from Phase 07, needs --fix repair) | Complete |
 | MDL-03 | Phase 07 | Done |
 | FT-01 | Phase 08 | Done |
 | FT-02 | Phase 08 | Done |

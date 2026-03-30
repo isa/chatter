@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: ChatterBox Engine Support
 status: verifying
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-03-29T22:23:04.328Z"
-last_activity: 2026-03-29
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-30T23:55:11.329Z"
+last_activity: 2026-03-30
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 6
+  total_phases: 6
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 7
   percent: 33
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-29)
 
 **Core value:** Users can create reusable voice profiles and generate high-quality speech from text or documents without leaving the command line.
-**Current focus:** Phase 08 — ChatterBox Controls
+**Current focus:** Phase 09 — milestone-gap-closure
 
 ## Current Position
 
-Phase: 08 (ChatterBox Controls) — EXECUTING
-Plan: 2 of 2
+Phase: 09 (milestone-gap-closure) — EXECUTING
+Plan: 1 of 1
 Status: Phase complete — ready for verification
-Last activity: 2026-03-29
+Last activity: 2026-03-30
 
 Progress: [███░░░░░░░] 33%
 
@@ -53,6 +53,7 @@ Progress: [███░░░░░░░] 33%
 | Phase 07 P01 | 3min | 2 tasks | 2 files |
 | Phase 08 P01 | 3min | 2 tasks | 6 files |
 | Phase 08 P02 | 3min | 2 tasks | 3 files |
+| Phase 09 P01 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ Progress: [███░░░░░░░] 33%
 - [Phase 08]: Qwen engine generate_speech accepts exaggeration/cfg_weight params for positional arg compatibility with dispatcher
 - [Phase 08]: Paralinguistic tag validation runs before model loading to fail fast on invalid tags
 - [Phase 08]: Exaggeration range validated to 0.0-1.0 in Rust before reaching Python bridge
+- [Phase 09]: TTY detection via std::io::IsTerminal on stdin — stdin is the correct stream to check for piped input
+- [Phase 09]: model download always runs after install (not gated by cb_models_missing) — fresh installs always need model download
 
 ### Pending Todos
 
@@ -77,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-29T22:23:04.322Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-03-30T23:55:11.321Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None

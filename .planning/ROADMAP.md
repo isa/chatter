@@ -18,39 +18,31 @@ Qwen3-TTS integration with voice design, voice cloning, speech generation, and m
 
 **Milestone Goal:** Add ChatterBox as a second TTS engine with full voice cloning, model management, and engine-specific controls -- without breaking existing Qwen3-TTS functionality.
 
-- [ ] **Phase 04: Engine Abstraction** - Refactor Python bridge into multi-engine dispatcher
-- [ ] **Phase 05: CLI Engine Routing** - Add --engine flag and profile engine tagging in Rust
+- [x] **Phase 04: Engine Abstraction** - ~~Refactor Python bridge into multi-engine dispatcher~~ Superseded by Phase 06 (2026-03-29)
+- [x] **Phase 05: CLI Engine Routing** - ~~Add --engine flag and profile engine tagging in Rust~~ Superseded by Phase 06 (2026-03-29)
 - [x] **Phase 06: ChatterBox Inference** - Implement ChatterBox voice cloning and speech generation (2026-03-29)
 - [x] **Phase 07: Model Management and Diagnostics** - Extend model and doctor commands for ChatterBox (2026-03-29)
 - [x] **Phase 08: ChatterBox Controls** - Expose emotion, exaggeration, and paralinguistic tag features (2026-03-29)
 
 ## Phase Details
 
-### Phase 04: Engine Abstraction
+### Phase 04: Engine Abstraction (Superseded)
 **Goal**: The Python bridge supports multiple engine modules without changing any existing behavior
 **Depends on**: Phase 03 (v1.0 complete)
-**Requirements**: ENG-02
-**Success Criteria** (what must be TRUE):
-  1. All existing `chatter` commands (design, clone, generate, model, doctor) work identically after the refactor -- no user-visible behavior change
-  2. Python bridge code is organized into `engines/qwen.py` (extracted from monolith) and a stub `engines/chatterbox.py`, with `chatter_bridge.py` acting as a dispatcher
-  3. `set_engine("qwen")` succeeds and routes all calls through the qwen engine module
-  4. Each engine module owns its own backend detection (MLX vs MPS vs CUDA) rather than relying on a global detector
-**Plans**: 1 plan
+**Requirements**: ENG-02 → reassigned to Phase 09
+**Status**: Superseded by Phase 06 — engine dispatch package was built with module-level functions (not the class-based architecture in 04-01-PLAN.md). Executing the original plan would break the working codebase.
+**Plans**: 1 plan (obsolete)
 Plans:
-- [ ] 04-01-PLAN.md -- Refactor Python bridge into engine package and update Rust deployment
+- [x] 04-01-PLAN.md -- ~~Refactor Python bridge into engine package~~ Obsolete — deliverables built by Phase 06
 
-### Phase 05: CLI Engine Routing
+### Phase 05: CLI Engine Routing (Superseded)
 **Goal**: Users can select which TTS engine to use, and profiles know which engine created them
 **Depends on**: Phase 04
-**Requirements**: ENG-01, ENG-03
-**Success Criteria** (what must be TRUE):
-  1. User can pass `--engine chatterbox` or `--engine qwen` as a global flag, or set `CHATTER_ENGINE=chatterbox` env var, and the bridge receives the correct engine selection
-  2. Existing voice profiles (created before v1.1) load without error and default to `engine: "qwen"`
-  3. Running `chatter --engine chatterbox design` exits with a clear error message explaining voice design is not available for ChatterBox
-  4. Running `chatter --engine chatterbox generate --profile qwen-profile` exits with a clear error explaining engine mismatch between profile and selected engine
-**Plans**: 1 plan
+**Requirements**: ENG-01, ENG-03 → reassigned to Phase 09
+**Status**: Superseded by Phase 06-01 — Engine enum, --engine flag, CHATTER_ENGINE env var, ProfileInfo.engine field, and set_engine() bridge all built inline. ENG-03 mismatch behavior diverges from spec (interactive prompt vs hard bail) — fixed in Phase 09.
+**Plans**: 1 plan (obsolete)
 Plans:
-- [ ] 05-01-PLAN.md -- Add --engine flag, profile engine tagging, and validation guards
+- [x] 05-01-PLAN.md -- ~~Add --engine flag, profile engine tagging, and validation guards~~ Obsolete — deliverables built by Phase 06
 
 ### Phase 06: ChatterBox Inference
 **Goal**: Users can clone voices and generate speech using ChatterBox models
@@ -94,16 +86,31 @@ Plans:
 - [ ] 08-01-PLAN.md -- Wire exaggeration and CFG weight parameters through Python and Rust bridge
 - [ ] 08-02-PLAN.md -- Engine-specific flag gating and paralinguistic tag validation
 
+### Phase 09: Milestone Gap Closure
+**Goal**: Close all gaps identified by v1.1 milestone audit — fix broken flows, wire missing connections, and remove dead code
+**Depends on**: Phases 06, 07, 08
+**Requirements**: ENG-01, ENG-02, ENG-03, MDL-02
+**Gap Closure**: Closes gaps from v1.1-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. `chatter generate` with an engine-mismatched profile bails with a clear error in non-interactive environments (pipes, CI) instead of blocking on stdin
+  2. `chatter doctor --fix` installs ChatterBox using the curated `install_chatterbox_deps()` pipeline (with `--no-deps`, mlx-audio on Apple Silicon) and downloads models via `download_model_chatterbox()`
+  3. `chatter doctor` ChatterBox section shows hardware compatibility status (MPS/CUDA/MLX)
+  4. No dead code: `is_chatterbox_installed()` in bridge/venv.rs and `ChatterBoxNotInstalled` error variant are either used or removed
+**Plans**: 1 plan
+Plans:
+- [x] 09-01-PLAN.md -- Fix engine mismatch TTY, doctor --fix install path, hardware check, dead code cleanup
+
 ## Progress
 
-**Execution Order:** 04 -> 05 -> 06 -> 07 -> 08
+**Execution Order:** 04 -> 05 -> 06 -> 07 -> 08 -> 09
 
-Note: Phase 07 and Phase 08 both depend on Phase 06 but are independent of each other. They can execute in either order.
+Note: Phase 04 and 05 were superseded by Phase 06 (deliverables built inline). Phase 09 closes remaining audit gaps.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 04. Engine Abstraction | v1.1 | 0/1 | Planning complete | - |
-| 05. CLI Engine Routing | v1.1 | 0/1 | Planning complete | - |
+| 04. Engine Abstraction | v1.1 | 0/1 | Superseded by Phase 06 | 2026-03-29 |
+| 05. CLI Engine Routing | v1.1 | 0/1 | Superseded by Phase 06 | 2026-03-29 |
 | 06. ChatterBox Inference | v1.1 | 2/2 | Complete | 2026-03-29 |
 | 07. Model Management and Diagnostics | v1.1 | 1/2 | In Progress|  |
 | 08. ChatterBox Controls | v1.1 | 0/2 | Planning complete | - |
+| 09. Milestone Gap Closure | v1.1 | 0/1 | Planning | - |
