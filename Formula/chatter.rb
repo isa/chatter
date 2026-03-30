@@ -2,7 +2,7 @@ class Chatter < Formula
   desc "Text-to-speech from the terminal, powered by Qwen3-TTS"
   homepage "https://github.com/isa/chatter"
   license "MIT"
-  version "1.0.0"
+  version "1.1.0"
 
   url "https://github.com/isa/chatter/archive/refs/tags/v#{version}.tar.gz"
   sha256 "8a9ec65dbe9c4ed2462075a160458f4689f6644e3a2a2c3ab651ec7bb9cec70c"
@@ -36,11 +36,11 @@ class Chatter < Formula
       system pip, "install", "--no-cache-dir", "qwen-tts"
     end
 
-    # Install the bridge module into the venv's site-packages.
+    # Install the bridge package into the venv's site-packages.
     # The binary also does this at runtime (ensure_bridge_installed),
     # but pre-installing avoids a first-run write to the Cellar.
     site_packages = (venv/"lib").glob("python*/site-packages").first
-    cp "chatter_bridge.py", site_packages/"chatter_bridge.py"
+    cp_r "chatter_bridge", site_packages/"chatter_bridge"
   end
 
   def caveats

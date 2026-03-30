@@ -1,14 +1,15 @@
 # ChatterBox TTS curated dependencies (installed with --no-deps)
-# Excludes gradio (~200MB) and resemble-perth (git URL) which are not needed for CLI inference.
-chatterbox-tts==0.1.7
+# Excludes gradio (~200MB) which is not needed for CLI inference.
+# Uses >= instead of == to avoid downgrade conflicts with brew-installed packages.
+chatterbox-tts>=0.1.7
+resemble-perth
+diffusers>=0.29.0
 numpy>=1.24.0,<2.0.0
-librosa==0.11.0
+librosa>=0.11.0
+scipy
 s3tokenizer
-transformers==5.2.0
-diffusers==0.29.0
-conformer==0.3.2
-safetensors==0.5.3
-pykakasi==2.3.0
+conformer>=0.3.2
+safetensors>=0.5.3
+pykakasi>=2.3.0
 pyloudnorm
 omegaconf
-spacy-pkuseg

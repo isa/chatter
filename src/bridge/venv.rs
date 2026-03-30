@@ -244,6 +244,7 @@ pub fn install_chatterbox_deps() -> Result<(), BridgeError> {
             "-m",
             "pip",
             "install",
+            "--ignore-installed",
             "-r",
             &req_file.to_string_lossy(),
         ])
