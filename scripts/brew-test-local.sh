@@ -7,10 +7,45 @@
 # the current source — no stale GitHub downloads.
 #
 # Usage:
-#   ./scripts/brew-test-local.sh          # full install test
-#   ./scripts/brew-test-local.sh --audit  # also run brew audit
+#   ./scripts/brew-test-local.sh                     # full install test (quiet mode)
+#   ./scripts/brew-test-local.sh --verbose           # show full brew output
+#   ./scripts/brew-test-local.sh --audit             # also run brew audit
+#   ./scripts/brew-test-local.sh --runtime-bundle FILE.tar.gz
 #
 set -euo pipefail
+
+AUDIT=false
+VERBOSE=false
+RUNTIME_BUNDLE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --audit)
+      AUDIT=true
+      shift
+      ;;
+    --verbose)
+      VERBOSE=true
+      shift
+      ;;
+    --runtime-bundle)
+      RUNTIME_BUNDLE="${2:-}"
+      if [[ -z "$RUNTIME_BUNDLE" ]]; then
+        echo "error: --runtime-bundle requires a file path"
+        exit 1
+      fi
+      if [[ ! -f "$RUNTIME_BUNDLE" ]]; then
+        echo "error: runtime bundle not found: $RUNTIME_BUNDLE"
+        exit 1
+      fi
+      shift 2
+      ;;
+    *)
+      echo "error: unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION=$(grep '^version' "$REPO_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')
@@ -57,7 +92,30 @@ echo "==> Uninstalling previous version (if any)..."
 brew uninstall chatter 2>/dev/null || true
 
 echo "==> Installing from local source..."
-brew install --verbose "${TAP_NAME}/chatter"
+if [[ -n "$RUNTIME_BUNDLE" ]]; then
+  export CHATTER_RUNTIME_BUNDLE_URL="file://${RUNTIME_BUNDLE}"
+  echo "    Using runtime bundle: $RUNTIME_BUNDLE"
+fi
+
+if [[ "$VERBOSE" == "true" ]]; then
+  brew install --verbose "${TAP_NAME}/chatter"
+else
+  LOG_FILE="${TARBALL_DIR}/brew-install-${VERSION}.log"
+  # Keep output short by default while still preserving full logs.
+  brew install "${TAP_NAME}/chatter" >"$LOG_FILE" 2>&1 &
+  BREW_PID=$!
+
+  SPIN='-\|/'
+  i=0
+  while kill -0 "$BREW_PID" 2>/dev/null; do
+    i=$(( (i + 1) % 4 ))
+    printf "\r    Installing chatter %c" "${SPIN:$i:1}"
+    sleep 0.2
+  done
+  wait "$BREW_PID"
+  printf "\r    Installing chatter done\n"
+  echo "    Full install log: $LOG_FILE"
+fi
 
 echo ""
 echo "==> Running chatter doctor (simulating clean user environment)..."
@@ -69,7 +127,7 @@ echo ""
 echo "==> Running brew test..."
 brew test "${TAP_NAME}/chatter" || true
 
-if [[ "${1:-}" == "--audit" ]]; then
+if [[ "$AUDIT" == "true" ]]; then
     echo ""
     echo "==> Running brew audit..."
     brew audit --strict "${TAP_DIR}/Formula/chatter.rb" || true

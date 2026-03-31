@@ -17,6 +17,8 @@ class Chatter < Formula
   def install
     # Tell PyO3 to link against Homebrew's Python 3.12
     ENV["PYO3_PYTHON"] = Formula["python@3.12"].opt_bin/python3
+    ENV["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+    ENV["PIP_PROGRESS_BAR"] = "off"
 
     # Build the Rust binary (build.rs handles rpath for libpython)
     system "cargo", "install", *std_cargo_args
@@ -28,12 +30,28 @@ class Chatter < Formula
 
     # Determine which TTS backend to install based on platform
     pip = venv/"bin/pip"
-    if Hardware::CPU.arm? && OS.mac?
-      # Apple Silicon: use mlx-audio for optimized Metal inference (pinned deps)
-      system pip, "install", "--no-cache-dir", "--quiet", "--only-binary", ":all:", "-r", buildpath/"requirements-mlx.txt"
-    else
-      # CUDA or CPU fallback: use qwen-tts
-      system pip, "install", "--no-cache-dir", "qwen-tts"
+    used_runtime_bundle = false
+
+    # Optional fast-path: prebuilt runtime bundle.
+    # Maintainers can publish a tar.gz containing a preconfigured `venv/`
+    # tree and provide its URL via CHATTER_RUNTIME_BUNDLE_URL at build time.
+    runtime_bundle_url = ENV["CHATTER_RUNTIME_BUNDLE_URL"]
+    if runtime_bundle_url && !runtime_bundle_url.empty?
+      runtime_bundle = buildpath/"chatter-runtime-venv.tar.gz"
+      if system "curl", "-fL", runtime_bundle_url, "-o", runtime_bundle
+        system "tar", "-xzf", runtime_bundle, "-C", libexec
+        used_runtime_bundle = (libexec/"venv/bin/python").exist?
+      end
+    end
+
+    unless used_runtime_bundle
+      if Hardware::CPU.arm? && OS.mac?
+        # Apple Silicon: use mlx-audio for optimized Metal inference (pinned deps)
+        system pip, "install", "--no-cache-dir", "--quiet", "--only-binary", ":all:", "-r", buildpath/"requirements-mlx.txt"
+      else
+        # CUDA or CPU fallback: use qwen-tts
+        system pip, "install", "--no-cache-dir", "--quiet", "qwen-tts"
+      end
     end
 
     # Install the bridge package into the venv's site-packages.

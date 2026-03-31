@@ -46,6 +46,28 @@ brew install chatter
 
 Homebrew installs everything: the binary, a bundled Python venv with the correct inference backend (`mlx-audio` on Apple Silicon, `qwen-tts` on CUDA), and all Python dependencies. No manual setup needed.
 
+### Install Speed + Output Noise
+
+- `brew install chatter` output verbosity is controlled by Homebrew itself (formulae cannot render custom progress bars/spinners in user terminals).
+- Avoid `--verbose` unless debugging; it expands Cargo/Python logs heavily.
+- For local formula testing, use `scripts/brew-test-local.sh` (quiet by default with a spinner and saved full log).
+
+For maintainers, there is now an optional **preconfigured runtime bundle** fast-path:
+
+1. Build bundle once:
+
+```sh
+./scripts/build-runtime-bundle.sh
+```
+
+2. Test formula install using the bundle (skips the long pip dependency solve/install step):
+
+```sh
+./scripts/brew-test-local.sh --runtime-bundle /tmp/chatter-runtime-bundle/chatter-runtime-venv-macos-arm64.tar.gz
+```
+
+3. In CI/release pipelines, set `CHATTER_RUNTIME_BUNDLE_URL` during formula build to reuse that bundle.
+
 After installing, download the TTS models:
 
 ```sh
