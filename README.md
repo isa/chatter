@@ -1,6 +1,6 @@
 # chatter
 
-A Rust CLI tool that wraps [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) to provide text-to-speech with voice profile management. Design custom voices from natural language descriptions, clone voices from audio samples, and generate speech from text or documents — all from the terminal.
+A Rust CLI tool for local text-to-speech with voice profile management. It wraps **[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)** and, on supported hardware, **[ChatterBox](https://github.com/resemble-ai/chatterbox)** (Resemble AI) as a second engine. Design voices from descriptions, clone from audio, and generate speech from text or documents — all from the terminal.
 
 ## Why chatter?
 
@@ -30,12 +30,13 @@ pbpaste | chatter generate --profile narrator -o clipboard.mp3
 
 ## Features
 
-- **Voice Design** — Create voice profiles from natural language descriptions (e.g., "a warm, deep male voice with a slight British accent")
-- **Voice Cloning** — Clone a voice from a reference audio sample
-- **Speech Generation** — Generate MP3 audio from text using saved voice profiles
-- **Model Management** — Download, list, and manage Qwen3-TTS model variants
-- **Document Input** — Generate speech from PDF, DOCX, TXT, and Markdown files with automatic text chunking
-- **Environment Doctor** — Validate your setup with `chatter doctor` and auto-fix with `--fix`
+- **Dual engines** — `qwen` (default) or `chatterbox` via `--engine` or `CHATTER_ENGINE`
+- **Voice Design** — Create profiles from natural language (Qwen3-TTS)
+- **Voice Cloning** — Clone from reference audio (both engines; profiles record which engine created them)
+- **Speech Generation** — MP3 output from text or documents
+- **Model Management** — Download and list Qwen3-TTS and ChatterBox model caches
+- **Document Input** — PDF, DOCX, TXT, Markdown with chunking
+- **Environment Doctor** — `chatter doctor` checks venv, GPU, models, and Python import sanity; `chatter doctor --fix` can install missing deps and download models
 
 ## Installation
 
@@ -44,42 +45,49 @@ brew tap isa/tap
 brew install chatter
 ```
 
-Homebrew installs everything: the binary, a bundled Python venv with the correct inference backend (`mlx-audio` on Apple Silicon, `qwen-tts` on CUDA), and all Python dependencies. No manual setup needed.
+Homebrew installs the Rust binary and a **bundled Python venv** with the right inference stack (`mlx-audio` + pinned deps on Apple Silicon, `qwen-tts` on CUDA). ChatterBox Python deps are installed when you run `chatter model download --engine chatterbox` or `chatter doctor --fix` (they are not all bundled in the initial Cellar venv on every platform).
+
+**PATH:** If `which chatter` shows `~/.cargo/bin/chatter`, you are running a **cargo-built** binary, not Homebrew. Use `$(brew --prefix)/bin/chatter` or put Homebrew’s `bin` before `~/.cargo/bin` in `PATH`.
 
 ### Install Speed + Output Noise
 
-- `brew install chatter` output verbosity is controlled by Homebrew itself (formulae cannot render custom progress bars/spinners in user terminals).
-- Avoid `--verbose` unless debugging; it expands Cargo/Python logs heavily.
-- For local formula testing, use `scripts/brew-test-local.sh` (quiet by default with a spinner and saved full log).
+- Homebrew controls how `brew install` looks in your terminal; formulas cannot inject a custom progress bar.
+- Avoid `brew install --verbose` unless debugging (it prints full Cargo/pip output).
+- For **local formula testing** from this repo, use `scripts/brew-test-local.sh`: quiet by default, spinner while install runs, full log saved under `/tmp/chatter-brew-test/`. Flags: `--verbose`, `--audit`, `--runtime-bundle PATH`.
 
-For maintainers, there is now an optional **preconfigured runtime bundle** fast-path:
+**Optional fast path (maintainers / CI):** ship a **prebuilt runtime venv** tarball to skip the long `pip install -r requirements-mlx.txt` step during formula build.
 
-1. Build bundle once:
+1. Build the bundle (Apple Silicon / `requirements-mlx.txt`):
 
 ```sh
 ./scripts/build-runtime-bundle.sh
+# writes ${TMPDIR:-/tmp}/chatter-runtime-bundle/chatter-runtime-venv-macos-arm64.tar.gz
 ```
 
-2. Test formula install using the bundle (skips the long pip dependency solve/install step):
+2. Test install using the bundle:
 
 ```sh
-./scripts/brew-test-local.sh --runtime-bundle /tmp/chatter-runtime-bundle/chatter-runtime-venv-macos-arm64.tar.gz
+./scripts/brew-test-local.sh --runtime-bundle "${TMPDIR:-/tmp}/chatter-runtime-bundle/chatter-runtime-venv-macos-arm64.tar.gz"
 ```
 
-3. In CI/release pipelines, set `CHATTER_RUNTIME_BUNDLE_URL` during formula build to reuse that bundle.
+3. In release builds, set `CHATTER_RUNTIME_BUNDLE_URL` to an `https://` URL for that tarball so `brew install` can download and extract it during `install`.
 
-After installing, download the TTS models:
+### Download models (after install)
 
 ```sh
-chatter model download                   # 8-bit (default, ~6 GB total)
-chatter model download --variant bf16    # full precision (~12 GB total)
+chatter model download                    # Qwen3-TTS (8-bit default, ~6 GB total)
+chatter model download --variant bf16     # Qwen bf16 (~12 GB total)
+
+chatter model download --engine chatterbox   # ChatterBox deps + model variants (large; Apple Silicon uses MLX community builds where available)
 ```
+
+Run `chatter doctor` to confirm imports, GPU, and caches.
 
 ### Requirements
 
-- **Python** 3.12+ (installed automatically by Homebrew as a dependency)
-- **GPU** — Apple Silicon (MLX) or CUDA-capable GPU
-- **Disk** — ~6 GB for 8-bit models (default) or ~12 GB for bf16
+- **Python** 3.12+ (Homebrew dependency when using the formula)
+- **GPU** — Apple Silicon (MLX / MPS) or CUDA-capable GPU
+- **Disk** — multiple GB for Qwen models; additional space for ChatterBox variants if you use `--engine chatterbox` (see `chatter model list`)
 
 ## Usage
 
@@ -93,8 +101,12 @@ chatter model download
 # Design a voice from a description
 chatter design "A warm, calm male narrator voice"
 
-# Clone a voice from audio
+# Clone a voice from audio (default engine: qwen)
 chatter clone reference.mp3
+
+# ChatterBox clone / generate (after: model download --engine chatterbox)
+chatter clone --engine chatterbox reference.wav --name myvoice
+chatter generate --engine chatterbox "Hello" --profile myvoice -o out.mp3
 
 # Generate speech
 chatter generate "Hello, world!" --profile warm-narrator -o output.mp3
@@ -129,10 +141,10 @@ chatter design "warm and calming motherly sound of a british female in her 60s"
 ### Doctor
 
 ```sh
-# Diagnose issues (read-only)
+# Diagnose venv, Python imports (numpy/scipy, etc.), GPU, and cached models
 chatter doctor
 
-# Auto-fix: downloads missing models
+# Auto-fix: install ChatterBox deps, download missing models, repair common issues
 chatter doctor --fix
 ```
 
@@ -156,7 +168,7 @@ Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, R
 
 ## Model Variants
 
-Downloads default to 8-bit quantized models (smaller, faster). Use `--variant bf16` for full precision.
+**Qwen3-TTS** downloads default to 8-bit quantized models (smaller, faster). Use `--variant bf16` for full precision.
 
 | Model | 8-bit | bf16 | Use Case |
 |-------|-------|------|----------|
@@ -164,7 +176,9 @@ Downloads default to 8-bit quantized models (smaller, faster). Use `--variant bf
 | Qwen3-TTS 1.7B CustomVoice | ~1.7 GB | ~3.4 GB | Speech generation with saved profiles |
 | Qwen3-TTS 1.7B Base | ~1.7 GB | ~3.4 GB | Voice cloning |
 
-On Apple Silicon, MLX-optimized variants are used automatically. Override at inference time with `--variant bf16` if needed.
+On Apple Silicon, MLX-optimized Qwen variants are used when available; use `--variant bf16` to override.
+
+**ChatterBox** uses separate Hugging Face repos (Original, Turbo, Multilingual, plus MLX community builds on Apple Silicon). Sizes vary — use `chatter model list` after downloading.
 
 ## Development
 
@@ -199,8 +213,9 @@ The binary discovers its Python venv via `CHATTER_VENV` env var or by looking fo
 ```sh
 # Create venv
 python3 -m venv ~/.config/chatter/dev-venv
-~/.config/chatter/dev-venv/bin/pip install mlx-audio  # Apple Silicon
-# or: ~/.config/chatter/dev-venv/bin/pip install qwen-tts  # CUDA
+~/.config/chatter/dev-venv/bin/pip install -r requirements-mlx.txt   # Apple Silicon (pinned)
+# or: ~/.config/chatter/dev-venv/bin/pip install qwen-tts              # CUDA
+# For ChatterBox: pip install chatterbox-tts (see also install_chatterbox_deps in bridge)
 
 # Tell chatter where to find it
 export CHATTER_VENV=~/.config/chatter/dev-venv
@@ -209,7 +224,7 @@ export CHATTER_VENV=~/.config/chatter/dev-venv
 target/release/chatter doctor
 ```
 
-The `chatter_bridge.py` adapter module is embedded in the binary at compile time (`include_str!`) and auto-installed into the venv's site-packages on first run. After changing `chatter_bridge.py`, rebuild and run any command to update it.
+The `chatter_bridge/` Python package is copied into the venv’s site-packages (Homebrew pre-installs it; dev venvs get it on first run). Rebuild after changing bridge code.
 
 ### Architecture
 
@@ -225,7 +240,7 @@ src/
     runtime.rs         # GPU/backend detection (CUDA > MLX > MPS > CPU)
     inference.rs       # PyO3 calls to chatter_bridge.py
     model.rs           # HuggingFace model download/list/remove
-    doctor.rs          # system diagnostics gathering
+    doctor.rs          # system diagnostics + import sanity checks
     error.rs           # BridgeError types
   commands/
     design.rs          # `chatter design` — interactive voice creation
@@ -247,7 +262,7 @@ src/
     mod.rs             # WAV-to-MP3 encoding (mp3lame-encoder)
     playback.rs        # afplay/paplay shell-out
     time_stretch.rs    # WSOLA time-stretching for --speed flag
-chatter_bridge.py      # Python adapter (embedded at compile time)
+chatter_bridge/        # Python bridge package (engines/qwen, engines/chatterbox, …)
 ```
 
 ## License
