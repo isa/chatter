@@ -17,6 +17,24 @@ set -euo pipefail
 AUDIT=false
 VERBOSE=false
 RUNTIME_BUNDLE=""
+DEBUG_LOG_PATH="/Users/isa.goksu/Projects/playgrounds/rust/chatter/.cursor/debug-5d112f.log"
+DEBUG_SESSION_ID="5d112f"
+DEBUG_RUN_ID="brew-test-local-$(date +%s)"
+
+debug_log() {
+  local hypothesis_id="$1"
+  local location="$2"
+  local message="$3"
+  local data_json="${4:-{}}"
+  local ts
+  ts="$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)"
+  printf '{"sessionId":"%s","runId":"%s","hypothesisId":"%s","location":"%s","message":"%s","data":%s,"timestamp":%s}\n' \
+    "$DEBUG_SESSION_ID" "$DEBUG_RUN_ID" "$hypothesis_id" "$location" "$message" "$data_json" "$ts" >> "$DEBUG_LOG_PATH"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +69,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION=$(grep '^version' "$REPO_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)".*/\1/')
 TAP_NAME="local/chatter"
 TAP_DIR="$(brew --repository)/Library/Taps/local/homebrew-chatter"
+
+#region agent log
+debug_log "H1" "brew-test-local.sh:setup" "script_start" "{\"version\":\"${VERSION}\",\"tap_name\":\"${TAP_NAME}\",\"tap_dir\":\"${TAP_DIR}\"}"
+#endregion
 
 # Use a stable location for the tarball so brew can find it
 TARBALL_DIR="${TMPDIR:-/tmp}/chatter-brew-test"
@@ -92,7 +114,14 @@ git -C "${TAP_DIR}" add -A && git -C "${TAP_DIR}" commit -q -m "update formula" 
 # Re-run this script to refresh; for GitHub-tracked updates use: brew tap isa/tap
 
 echo "==> Uninstalling previous version (if any)..."
-brew uninstall chatter 2>/dev/null || true
+if brew uninstall chatter 2>/dev/null; then
+  uninstall_result="removed"
+else
+  uninstall_result="not-installed-or-failed"
+fi
+#region agent log
+debug_log "H2" "brew-test-local.sh:uninstall" "post_uninstall" "{\"result\":\"${uninstall_result}\"}"
+#endregion
 
 echo "==> Installing from local source..."
 if [[ -n "$RUNTIME_BUNDLE" ]]; then
@@ -104,6 +133,9 @@ if [[ "$VERBOSE" == "true" ]]; then
   brew install --verbose "${TAP_NAME}/chatter"
 else
   LOG_FILE="${TARBALL_DIR}/brew-install-${VERSION}.log"
+  #region agent log
+  debug_log "H3" "brew-test-local.sh:install" "brew_install_started" "{\"log_file\":\"${LOG_FILE}\",\"tap_name\":\"${TAP_NAME}/chatter\"}"
+  #endregion
   # Keep output short by default while still preserving full logs.
   brew install "${TAP_NAME}/chatter" >"$LOG_FILE" 2>&1 &
   BREW_PID=$!
@@ -115,7 +147,34 @@ else
     printf "\r    Installing chatter %c" "${SPIN:$i:1}"
     sleep 0.2
   done
+  set +e
   wait "$BREW_PID"
+  install_exit=$?
+  set -e
+  #region agent log
+  debug_log "H3" "brew-test-local.sh:install" "brew_install_finished" "{\"exit_code\":${install_exit},\"log_file\":\"${LOG_FILE}\"}"
+  #endregion
+  if [[ "$install_exit" -ne 0 ]]; then
+    install_linkage_conflict=false
+    if rg -q "Failed to fix install linkage" "$LOG_FILE" && rg -q "Formulae found in multiple taps" "$LOG_FILE"; then
+      install_linkage_conflict=true
+    fi
+    cellar_bin="$(brew --cellar)/chatter/${VERSION}/bin/chatter"
+    if [[ "$install_linkage_conflict" == "true" && -x "$cellar_bin" ]]; then
+      #region agent log
+      debug_log "H4" "brew-test-local.sh:install" "linkage_conflict_recovered" "{\"cellar_bin\":\"${cellar_bin}\",\"install_exit\":${install_exit}}"
+      #endregion
+      echo ""
+      echo "    brew install returned ${install_exit} due to linkage conflict (multiple taps), but keg exists."
+      echo "    Continuing with Cellar binary: $cellar_bin"
+    else
+      echo ""
+      echo "    brew install failed (exit ${install_exit})"
+      echo "    Full install log: $LOG_FILE"
+      echo "    (Run with --verbose to stream errors live.)"
+      exit "$install_exit"
+    fi
+  fi
   printf "\r    Installing chatter done\n"
   echo "    Full install log: $LOG_FILE"
 fi
@@ -124,7 +183,14 @@ echo ""
 echo "==> Running chatter doctor (simulating clean user environment)..."
 # Unset CHATTER_VENV to simulate a real brew user who doesn't have it
 unset CHATTER_VENV 2>/dev/null || true
-"$(brew --prefix)/bin/chatter" doctor || true
+CHATTER_BIN="$(brew --prefix)/bin/chatter"
+if [[ ! -x "$CHATTER_BIN" ]]; then
+  CHATTER_BIN="$(brew --cellar)/chatter/${VERSION}/bin/chatter"
+fi
+#region agent log
+debug_log "H5" "brew-test-local.sh:doctor" "resolved_chatter_bin" "{\"chatter_bin\":\"${CHATTER_BIN}\"}"
+#endregion
+"$CHATTER_BIN" doctor || true
 
 echo ""
 echo "==> Running brew test..."
@@ -138,7 +204,12 @@ fi
 
 echo ""
 echo "==> Install location:"
-ls -la "$(brew --prefix)/bin/chatter"
+if [[ -x "$(brew --prefix)/bin/chatter" ]]; then
+  ls -la "$(brew --prefix)/bin/chatter"
+else
+  echo "  (not linked in $(brew --prefix)/bin due to multi-tap conflict)"
+  ls -la "$(brew --cellar)/chatter/${VERSION}/bin/chatter" 2>/dev/null || echo "  (cellar binary not found)"
+fi
 echo ""
 echo "==> Venv location:"
 ls -la "$(brew --cellar)/chatter/${VERSION}/libexec/venv/bin/python" 2>/dev/null || echo "  (venv not found — check formula)"

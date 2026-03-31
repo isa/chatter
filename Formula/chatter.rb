@@ -46,8 +46,10 @@ class Chatter < Formula
 
     unless used_runtime_bundle
       if Hardware::CPU.arm? && OS.mac?
-        # Apple Silicon: use mlx-audio for optimized Metal inference (pinned deps)
-        system pip, "install", "--no-cache-dir", "--quiet", "--only-binary", ":all:", "-r", buildpath/"requirements-mlx.txt"
+        # Apple Silicon: use mlx-audio for optimized Metal inference (pinned deps).
+        # Do not force --only-binary: some transitive deps (e.g. miniaudio) may
+        # not publish cp313 arm64 wheels yet.
+        system pip, "install", "--no-cache-dir", "--quiet", "-r", buildpath/"requirements-mlx.txt"
       else
         # CUDA or CPU fallback: use qwen-tts
         system pip, "install", "--no-cache-dir", "--quiet", "qwen-tts"
