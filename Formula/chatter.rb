@@ -1,7 +1,7 @@
 class Chatter < Formula
   desc "Text-to-speech from the terminal, powered by Qwen3-TTS"
   homepage "https://github.com/isa/chatter"
-  license "MIT"
+  license "Apache-2.0"
   # Semver for Homebrew; source archive uses tag `v1.1` (see isa/chatter tags).
   version "1.1.0"
 
