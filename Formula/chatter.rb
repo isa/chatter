@@ -2,10 +2,10 @@ class Chatter < Formula
   desc "Text-to-speech from the terminal, powered by Qwen3-TTS"
   homepage "https://github.com/isa/chatter"
   license "Apache-2.0"
-  version "1.1.1"
+  version "1.1.2"
 
-  url "https://github.com/isa/chatter/archive/refs/tags/v1.1.1.tar.gz"
-  sha256 "8870f95ad81b8ef63543916a458277154feaceef44bc46ef7154373c6ca4b2df"
+  url "https://github.com/isa/chatter/archive/refs/tags/v1.1.2.tar.gz"
+  sha256 "PLACEHOLDER"
 
   depends_on "rust" => :build
   depends_on "python@3.12"
