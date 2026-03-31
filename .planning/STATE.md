@@ -59,7 +59,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260331-556 | Fix brew venv numpy/scipy crash + doctor import check | 2026-03-31 | 866caa4 | [260331-556-fix-brew-venv-numpy-scipy-crash-doctor-i](./quick/260331-556-fix-brew-venv-numpy-scipy-crash-doctor-i/) |
-| 260331-5dj | Improve brew install speed/noise with runtime bundle + spinner | 2026-03-31 | (pending) | [260331-5dj-improve-brew-install-speed-noise-with-ru](./quick/260331-5dj-improve-brew-install-speed-noise-with-ru/) |
+| 260331-5dj | Improve brew install speed/noise with runtime bundle + spinner | 2026-03-31 | 8529c24 | [260331-5dj-improve-brew-install-speed-noise-with-ru](./quick/260331-5dj-improve-brew-install-speed-noise-with-ru/) |
 
 ## Session Continuity
 
