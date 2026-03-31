@@ -342,6 +342,18 @@ pub fn remove_chatterbox_models() -> Result<(), BridgeError> {
     })
 }
 
+/// Check whether the `chatterbox-tts` Python package is installed in the venv.
+///
+/// Uses `importlib.metadata` (no heavy import) so it's safe to call from `model list`.
+pub fn is_chatterbox_package_installed() -> bool {
+    Python::attach(|py| {
+        py.import("importlib.metadata")
+            .ok()
+            .and_then(|m| m.call_method1("version", ("chatterbox-tts",)).ok())
+            .is_some()
+    })
+}
+
 /// Remove all cached 1.7B model variants.
 ///
 /// Detects the compute backend to determine which variant repos to remove.

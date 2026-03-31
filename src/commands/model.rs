@@ -6,7 +6,7 @@ use owo_colors::OwoColorize;
 use owo_colors::Stream::Stderr;
 
 use crate::bridge;
-use crate::bridge::model::{size_label, ModelQuantization};
+use crate::bridge::model::{self, size_label, ModelQuantization};
 use crate::cli::{Engine, GlobalArgs, ModelCommands};
 
 /// Create a spinner with the standard chatter style.
@@ -178,6 +178,14 @@ pub fn run(command: ModelCommands, global: &GlobalArgs) -> anyhow::Result<()> {
                         let path_str = model.local_path.as_deref().unwrap_or("-");
                         let variant = model.variant_label.as_deref().unwrap_or(&model.repo_id);
                         println!("{:<14} {:<40} {:>10} {}", variant, model.repo_id, size_str, path_str);
+                    }
+                    if !model::is_chatterbox_package_installed() {
+                        println!();
+                        eprintln!(
+                            "{} ChatterBox model weights are cached but the Python package is not installed.",
+                            "Warning:".if_supports_color(Stderr, |t| t.yellow()),
+                        );
+                        eprintln!("  Run: chatter model download --engine chatterbox");
                     }
                 }
             }
