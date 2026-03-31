@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -222,35 +221,6 @@ fn venv_python_path(venv: &std::path::Path) -> PathBuf {
 pub fn install_chatterbox_deps() -> Result<(), BridgeError> {
     let venv = venv_path()?;
     let pip = venv_python_path(&venv);
-
-    // #region agent log
-    {
-        let py_ver = Command::new(&pip)
-            .args(["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"])
-            .output()
-            .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_default();
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0);
-        let _ = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/Users/isa.goksu/Projects/playgrounds/rust/chatter/.cursor/debug-5d112f.log")
-            .and_then(|mut f| {
-                writeln!(
-                    f,
-                    r#"{{"sessionId":"5d112f","hypothesisId":"H1","location":"venv.rs:install_chatterbox_deps","message":"chatterbox_deps_start","data":{{"python_minor":"{}","PIN_NUMPY":"{}","PIN_SCIPY":"{}"}},"timestamp":{}}}"#,
-                    py_ver,
-                    PIN_NUMPY,
-                    PIN_SCIPY,
-                    ts
-                )
-            });
-    }
-    // #endregion
 
     // Step 1: Install chatterbox-tts with --no-deps
     let output = Command::new(&pip)
