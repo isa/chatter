@@ -10,7 +10,7 @@ pub enum BridgeError {
     #[error("qwen-tts is not installed. Install it with: pip install qwen-tts")]
     QwenTtsNotInstalled,
 
-    #[error("Python runtime not found. Ensure Python 3.12 is installed")]
+    #[error("Python runtime not found. Ensure Python 3.13 is installed")]
     PythonNotFound,
 
     #[error("Python venv not found. Set CHATTER_VENV=/path/to/venv or reinstall: brew reinstall chatter")]

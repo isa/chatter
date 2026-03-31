@@ -323,7 +323,7 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
                     spinner.abandon_with_message("NumPy/SciPy repair failed");
                     println!(
                         "Warning: could not reinstall pinned numpy/scipy: {e}\n\
-                         Try manually: $(brew --prefix)/Cellar/chatter/*/libexec/venv/bin/pip install numpy==2.2.6 scipy==1.16.2"
+                         Try manually: $(brew --prefix)/Cellar/chatter/*/libexec/venv/bin/pip install numpy==2.3.0 scipy==1.16.2"
                     );
                 }
             }

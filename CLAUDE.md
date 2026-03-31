@@ -12,7 +12,7 @@ A Rust CLI tool that wraps Qwen3-TTS from Hugging Face to provide text-to-speech
 - **Tech stack**: Rust CLI with PyO3 for Python interop — required because model is Python-only
 - **Hardware**: Apple Silicon (MLX/MPS) or CUDA-capable GPU required for local inference
 - **Distribution**: `brew install chatter` must work out of the box. Chatter manages its own Python venv at `~/.local/share/chatter/venv/` with auto-setup on first run. Users do NOT manually install Python packages.
-- **Dependencies**: Python 3.12+ runtime (Homebrew formula declares `depends_on "python@3.12"`). `qwen-tts` is auto-installed into the managed venv on first run.
+- **Dependencies**: Python 3.13 runtime (Homebrew formula declares `depends_on "python@3.13"`). `qwen-tts` is auto-installed into the managed venv on first run. Python 3.13 aligns ChatterBox (`chatterbox-tts`) with NumPy 2.x pins (PyPI allows NumPy 2.x only for Python ≥3.13).
 - **Audio**: MP3 output (requires encoding from WAV produced by model)
 <!-- GSD:project-end -->
 
@@ -57,7 +57,7 @@ A Rust CLI tool that wraps Qwen3-TTS from Hugging Face to provide text-to-speech
 ### Python Environment
 | Technology | Version | Purpose | Why | Confidence |
 |------------|---------|---------|-----|------------|
-| Python | 3.12 | Runtime for qwen-tts | qwen-tts supports 3.9-3.13 but recommends 3.12 for optimal compatibility. PyO3 0.28 supports CPython 3.7+. | HIGH |
+| Python | 3.13 | Runtime for qwen-tts + ChatterBox | Shared venv uses NumPy 2.3 with SciPy 1.16; `chatterbox-tts` requires Python 3.13+ for NumPy 2.x. PyO3 0.28 supports CPython 3.7+. | HIGH |
 | qwen-tts | 0.1.1 | TTS model inference | Official Python package from Qwen team. Wraps Qwen3-TTS models. Depends on PyTorch, transformers, soundfile. | HIGH |
 ## Alternatives Considered
 | Category | Recommended | Alternative | Why Not |
@@ -77,9 +77,9 @@ A Rust CLI tool that wraps Qwen3-TTS from Hugging Face to provide text-to-speech
 ### Cargo.toml Setup
 ### Key Patterns
 ### Build Requirements
-- System must have Python 3.12 development headers (`python3-dev` on Ubuntu)
+- System must have Python 3.13 development headers (`python3-dev` on Ubuntu)
 - `pyo3-build-config` (transitive dep) auto-detects Python at build time
-- Set `PYO3_PYTHON=python3.12` env var if multiple Python versions installed
+- Set `PYO3_PYTHON=python3.13` env var if multiple Python versions installed
 ## Audio Pipeline
 ## Installation
 # Cargo.toml

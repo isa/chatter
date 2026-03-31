@@ -2,21 +2,24 @@ class Chatter < Formula
   desc "Text-to-speech from the terminal, powered by Qwen3-TTS"
   homepage "https://github.com/isa/chatter"
   license "Apache-2.0"
-  version "1.1.2"
+  version "1.1.3"
 
-  url "https://github.com/isa/chatter/archive/refs/tags/v1.1.2.tar.gz"
-  sha256 "bc0b34f02f448279090f662879a99570d71fa5bc33338732488beb13ae7dff3b"
+  # After pushing tag v1.1.3, if checksum fails run:
+  #   curl -sL https://github.com/isa/chatter/archive/refs/tags/v1.1.3.tar.gz | shasum -a 256
+  # (GitHub tarball SHA may differ from local `git archive`.)
+  url "https://github.com/isa/chatter/archive/refs/tags/v1.1.3.tar.gz"
+  sha256 "13d587bb383155ce8e0a4f16d2bcd3048c35c11ae72dda0c39f52c53672c3e66"
 
   depends_on "rust" => :build
-  depends_on "python@3.12"
+  depends_on "python@3.13"
 
   def python3
-    "python3.12"
+    "python3.13"
   end
 
   def install
-    # Tell PyO3 to link against Homebrew's Python 3.12
-    ENV["PYO3_PYTHON"] = Formula["python@3.12"].opt_bin/python3
+    # Tell PyO3 to link against Homebrew's Python 3.13 (ChatterBox + NumPy 2.x)
+    ENV["PYO3_PYTHON"] = Formula["python@3.13"].opt_bin/python3
     ENV["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
     ENV["PIP_PROGRESS_BAR"] = "off"
 
@@ -26,7 +29,7 @@ class Chatter < Formula
     # Create the bundled venv at libexec/venv/ — this is where the
     # binary looks for Python packages (../libexec/venv/ relative to bin/)
     venv = libexec/"venv"
-    system Formula["python@3.12"].opt_bin/python3, "-m", "venv", venv
+    system Formula["python@3.13"].opt_bin/python3, "-m", "venv", venv
 
     # Determine which TTS backend to install based on platform
     pip = venv/"bin/pip"

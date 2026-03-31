@@ -45,7 +45,7 @@ brew tap isa/tap
 brew install chatter
 ```
 
-Homebrew installs the Rust binary and a **bundled Python venv** with the right inference stack (`mlx-audio` + pinned deps on Apple Silicon, `qwen-tts` on CUDA). ChatterBox Python deps are installed when you run `chatter model download --engine chatterbox` or `chatter doctor --fix` (they are not all bundled in the initial Cellar venv on every platform).
+Homebrew installs the Rust binary and a **bundled Python 3.13 venv** with the right inference stack (`mlx-audio` + pinned deps on Apple Silicon, `qwen-tts` on CUDA). ChatterBox Python deps are installed when you run `chatter model download --engine chatterbox` or `chatter doctor --fix` (they are not all bundled in the initial Cellar venv on every platform). Python 3.13 is required so the same NumPy 2.x pins work for both MLX/Qwen and `chatterbox-tts` (that package only allows NumPy 2.x on Python 3.13+).
 
 **PATH:** If `which chatter` shows `~/.cargo/bin/chatter`, you are running a **cargo-built** binary, not Homebrew. Use `$(brew --prefix)/bin/chatter` or put Homebrew’s `bin` before `~/.cargo/bin` in `PATH`.
 
@@ -85,7 +85,7 @@ Run `chatter doctor` to confirm imports, GPU, and caches.
 
 ### Requirements
 
-- **Python** 3.12+ (Homebrew dependency when using the formula)
+- **Python** 3.13 (Homebrew `python@3.13` when using the formula; matches the bundled venv)
 - **GPU** — Apple Silicon (MLX / MPS) or CUDA-capable GPU
 - **Disk** — multiple GB for Qwen models; additional space for ChatterBox variants if you use `--engine chatterbox` (see `chatter model list`)
 
@@ -185,25 +185,25 @@ On Apple Silicon, MLX-optimized Qwen variants are used when available; use `--va
 ### Prerequisites
 
 - Rust 1.85+ (edition 2024)
-- [mise](https://mise.jdx.dev/) (recommended) or Python 3.12+ installed manually
+- [mise](https://mise.jdx.dev/) (recommended) or Python 3.13+ installed manually
 - Apple Silicon Mac or CUDA GPU
 
 ### Building from source
 
 ```sh
-# Install pinned tool versions (Python 3.12.3)
+# Install pinned tool versions (Python 3.13.x — see mise.toml)
 mise install
 
 # Build
 cargo build --release
 ```
 
-`mise` reads `mise.toml` in the project root, which pins Python 3.12.3 and sets `PYO3_PYTHON` so PyO3 links against the correct interpreter automatically.
+`mise` reads `mise.toml` in the project root, which pins Python and sets `PYO3_PYTHON` so PyO3 links against the correct interpreter automatically.
 
 If you don't use mise, set `PYO3_PYTHON` manually:
 
 ```sh
-PYO3_PYTHON=python3.12 cargo build --release
+PYO3_PYTHON=python3.13 cargo build --release
 ```
 
 ### Setting up the dev venv
@@ -264,6 +264,17 @@ src/
     time_stretch.rs    # WSOLA time-stretching for --speed flag
 chatter_bridge/        # Python bridge package (engines/qwen, engines/chatterbox, …)
 ```
+
+## Releasing (maintainers)
+
+1. Tag the release from `main` (match `version` in `Cargo.toml`), e.g. `git tag v1.1.3 && git push origin v1.1.3`.
+2. If Homebrew reports a checksum mismatch for `Formula/chatter.rb`, refresh `sha256` with the GitHub tarball (not `git archive`):
+
+```sh
+curl -sL "https://github.com/isa/chatter/archive/refs/tags/vX.Y.Z.tar.gz" | shasum -a 256
+```
+
+3. Commit the updated `sha256` if it changed.
 
 ## License
 

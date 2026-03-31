@@ -6,7 +6,7 @@ OUT_DIR="${TMPDIR:-/tmp}/chatter-runtime-bundle"
 WORK_DIR="${OUT_DIR}/work"
 BUNDLE_PATH="${OUT_DIR}/chatter-runtime-venv-macos-arm64.tar.gz"
 
-PYTHON_BIN="${PYTHON_BIN:-python3.12}"
+PYTHON_BIN="${PYTHON_BIN:-python3.13}"
 
 echo "==> Building preconfigured runtime venv bundle"
 echo "    Python: $PYTHON_BIN"

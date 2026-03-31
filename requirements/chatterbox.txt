@@ -1,5 +1,8 @@
 # ChatterBox TTS curated dependencies (installed with --no-deps)
 # Excludes gradio (~200MB) which is not needed for CLI inference.
+#
+# The Homebrew venv uses Python 3.13+ so `chatterbox-tts` accepts NumPy 2.x
+# (PyPI: numpy<2 only for python_version < "3.13"; numpy>=2 for 3.13+).
 # numpy/scipy MUST match requirements-mlx.txt — SciPy 1.16+ arm64 wheels are
 # compiled against NumPy 2.3 C ABI. Using NumPy < 2.3 causes:
 #   ValueError: All ufuncs must have type numpy.ufunc (sph_legendre_p)
