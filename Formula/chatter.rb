@@ -4,11 +4,8 @@ class Chatter < Formula
   license "Apache-2.0"
   version "1.1.3"
 
-  # After pushing tag v1.1.3, if checksum fails run:
-  #   curl -sL https://github.com/isa/chatter/archive/refs/tags/v1.1.3.tar.gz | shasum -a 256
-  # (GitHub tarball SHA may differ from local `git archive`.)
   url "https://github.com/isa/chatter/archive/refs/tags/v1.1.3.tar.gz"
-  sha256 "13d587bb383155ce8e0a4f16d2bcd3048c35c11ae72dda0c39f52c53672c3e66"
+  sha256 "a34860661e4cf45d0a9423bf766608aaac14b7e6000d874664c527ea6cf9ae01"
 
   depends_on "rust" => :build
   depends_on "python@3.13"
