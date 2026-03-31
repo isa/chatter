@@ -27,7 +27,7 @@ mlx-lm==0.31.1
 mlx-metal==0.31.1
 msgpack==1.1.2
 numba==0.63.1
-numpy==2.2.6
+numpy==2.3.0
 packaging==26.0
 platformdirs==4.5.1
 pooch==1.8.2

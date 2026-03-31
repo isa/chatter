@@ -22,7 +22,8 @@ pub enum VenvDiagnosis {
 const CHATTERBOX_REQUIREMENTS: &str = include_str!("../../requirements/chatterbox.txt");
 
 /// Pinned versions — keep in sync with `requirements-mlx.txt`.
-const PIN_NUMPY: &str = "2.2.6";
+/// SciPy 1.16+ arm64 wheels need NumPy >= 2.3 (compiled against its C ABI).
+const PIN_NUMPY: &str = "2.3.0";
 const PIN_SCIPY: &str = "1.16.2";
 
 /// The chatter_bridge package sources, embedded at compile time.

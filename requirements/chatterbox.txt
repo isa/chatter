@@ -1,11 +1,12 @@
 # ChatterBox TTS curated dependencies (installed with --no-deps)
 # Excludes gradio (~200MB) which is not needed for CLI inference.
-# numpy/scipy MUST match requirements-mlx.txt — SciPy 1.17+ can break scipy.special
-# with certain NumPy 2.x combos (sph_legendre_p / MultiUFunc ufunc errors).
+# numpy/scipy MUST match requirements-mlx.txt — SciPy 1.16+ arm64 wheels are
+# compiled against NumPy 2.3 C ABI. Using NumPy < 2.3 causes:
+#   ValueError: All ufuncs must have type numpy.ufunc (sph_legendre_p)
 chatterbox-tts>=0.1.7
 resemble-perth
 diffusers>=0.29.0
-numpy==2.2.6
+numpy==2.3.0
 librosa>=0.11.0
 scipy==1.16.2
 s3tokenizer
