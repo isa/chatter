@@ -86,6 +86,24 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
             }
         }
 
+        // Python import sanity (NumPy/SciPy ABI issues, etc.)
+        if info.python_imports_ok {
+            ui::doctor_pass("Python imports", "ok");
+            passes += 1;
+        } else {
+            let detail = info
+                .python_imports_error
+                .as_deref()
+                .unwrap_or("failed (unknown error)");
+            ui::doctor_fail(
+                "Python imports",
+                &format!(
+                    "{detail} — try: brew reinstall chatter (or recreate venv / reinstall numpy+scipy)"
+                ),
+            );
+            fails += 1;
+        }
+
         // Inference package
         match &info.inference_pkg_version {
             Some(version) => {

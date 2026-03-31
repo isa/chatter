@@ -73,9 +73,11 @@ mod tests {
         let result = validate_paralinguistic_tags("[laugh] hello [boom] bye [cry]");
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.contains("[boom]"));
-        assert!(!err.contains("[laugh]"));
-        assert!(!err.contains("[cry]"));
+        // Only the invalid tags should appear in the "Invalid ..." line.
+        let first_line = err.lines().next().unwrap_or("");
+        assert!(first_line.contains("[boom]"));
+        assert!(!first_line.contains("[laugh]"));
+        assert!(!first_line.contains("[cry]"));
     }
 
     #[test]

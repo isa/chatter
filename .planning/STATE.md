@@ -54,6 +54,12 @@ None.
 - Possible transformers version tension between qwen-tts and chatterbox-tts on CUDA
 - ChatterBox on Python 3.12 needs ongoing validation
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260331-556 | Fix brew venv numpy/scipy crash + doctor import check | 2026-03-31 | (pending) | [260331-556-fix-brew-venv-numpy-scipy-crash-doctor-i](./quick/260331-556-fix-brew-venv-numpy-scipy-crash-doctor-i/) |
+
 ## Session Continuity
 
 Last session: (milestone completion)

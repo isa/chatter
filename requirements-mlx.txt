@@ -27,7 +27,7 @@ mlx-lm==0.31.1
 mlx-metal==0.31.1
 msgpack==1.1.2
 numba==0.63.1
-numpy==2.3.5
+numpy==2.2.6
 packaging==26.0
 platformdirs==4.5.1
 pooch==1.8.2
@@ -39,7 +39,7 @@ regex==2026.1.15
 requests==2.32.5
 safetensors==0.7.0
 scikit-learn==1.8.0
-scipy==1.17.0
+scipy==1.16.2
 sentencepiece==0.2.1
 shellingham==1.5.4
 sounddevice==0.5.3

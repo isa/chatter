@@ -16,6 +16,13 @@ pub struct SystemInfo {
     pub chatterbox_pkg_version: Option<String>,
     /// Whether the ChatterBox package is importable.
     pub chatterbox_installed: bool,
+    /// Whether key scientific stack imports succeed (e.g. scipy.special).
+    ///
+    /// This catches situations where package versions are present but importing
+    /// the dependency graph fails at runtime (common with NumPy/SciPy wheel ABI mismatches).
+    pub python_imports_ok: bool,
+    /// If python_imports_ok is false, this contains a short error string.
+    pub python_imports_error: Option<String>,
 }
 
 /// Gather system information for the doctor command.
@@ -49,6 +56,8 @@ pub fn get_system_info() -> SystemInfo {
         let chatterbox_pkg_version = get_package_version(py, "chatterbox-tts");
         let chatterbox_installed = chatterbox_pkg_version.is_some();
 
+        let (python_imports_ok, python_imports_error) = check_python_imports(py);
+
         SystemInfo {
             python_version,
             backend,
@@ -59,8 +68,31 @@ pub fn get_system_info() -> SystemInfo {
             hf_cache_size_gb,
             chatterbox_pkg_version,
             chatterbox_installed,
+            python_imports_ok,
+            python_imports_error,
         }
     })
+}
+
+fn check_python_imports(py: Python<'_>) -> (bool, Option<String>) {
+    let code = pyo3::ffi::c_str!(
+        r#"
+import importlib
+
+for mod in ("numpy", "scipy.special"):
+    importlib.import_module(mod)
+"#
+    );
+
+    match py.run(code, None, None) {
+        Ok(_) => (true, None),
+        Err(e) => {
+            // Keep it short for CLI output.
+            let msg = e.to_string();
+            let first_line = msg.lines().next().unwrap_or(&msg).to_string();
+            (false, Some(first_line))
+        }
+    }
 }
 
 /// Get the Python version string (first line of sys.version).
