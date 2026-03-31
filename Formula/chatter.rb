@@ -2,10 +2,11 @@ class Chatter < Formula
   desc "Text-to-speech from the terminal, powered by Qwen3-TTS"
   homepage "https://github.com/isa/chatter"
   license "MIT"
+  # Semver for Homebrew; source archive uses tag `v1.1` (see isa/chatter tags).
   version "1.1.0"
 
-  url "https://github.com/isa/chatter/archive/refs/tags/v#{version}.tar.gz"
-  sha256 "8a9ec65dbe9c4ed2462075a160458f4689f6644e3a2a2c3ab651ec7bb9cec70c"
+  url "https://github.com/isa/chatter/archive/refs/tags/v1.1.tar.gz"
+  sha256 "5c608f5e35e00b53816e01ee4f27b799deff1cd0ddedb362dd7dd1141bad72f6"
 
   depends_on "rust" => :build
   depends_on "python@3.12"
