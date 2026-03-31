@@ -49,6 +49,23 @@ Homebrew installs the Rust binary and a **bundled Python 3.13 venv** with the ri
 
 **PATH:** If `which chatter` shows `~/.cargo/bin/chatter`, you are running a **cargo-built** binary, not Homebrew. Use `$(brew --prefix)/bin/chatter` or put Homebrew’s `bin` before `~/.cargo/bin` in `PATH`.
 
+### `brew update` does nothing / chatter stuck on an old version
+
+**If you see:** `Warning: No remote 'origin' in .../Taps/local/homebrew-chatter, skipping update!`
+
+That tap was created by **`./scripts/brew-test-local.sh`**: it is a **local-only** Homebrew tap with **no Git remote**, so `brew update` never pulls new formulas. Your installed `chatter` version only changes when you **re-run** that script from an up-to-date clone (it regenerates the formula from the current tree) or you **switch to the published tap**.
+
+**Option A — use the published tap (recommended for normal use):**
+
+```sh
+brew untap local/chatter 2>/dev/null || true
+brew tap isa/tap
+brew update
+brew upgrade chatter
+```
+
+**Option B — keep testing installs from this repo:** pull latest `main`, then run `./scripts/brew-test-local.sh` again (reinstalls from your working tree; version follows `Cargo.toml`).
+
 ### Install Speed + Output Noise
 
 - Homebrew controls how `brew install` looks in your terminal; formulas cannot inject a custom progress bar.

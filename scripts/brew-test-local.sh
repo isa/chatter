@@ -88,6 +88,9 @@ sed \
 
 git -C "${TAP_DIR}" add -A && git -C "${TAP_DIR}" commit -q -m "update formula" --allow-empty 2>/dev/null || true
 
+# This tap has no origin remote: brew update skips it (expected).
+# Re-run this script to refresh; for GitHub-tracked updates use: brew tap isa/tap
+
 echo "==> Uninstalling previous version (if any)..."
 brew uninstall chatter 2>/dev/null || true
 
