@@ -21,6 +21,10 @@ pub enum VenvDiagnosis {
 /// Curated ChatterBox dependencies, embedded at compile time.
 const CHATTERBOX_REQUIREMENTS: &str = include_str!("../../requirements/chatterbox.txt");
 
+/// Pinned versions — keep in sync with `requirements-mlx.txt`.
+const PIN_NUMPY: &str = "2.2.6";
+const PIN_SCIPY: &str = "1.16.2";
+
 /// The chatter_bridge package sources, embedded at compile time.
 const BRIDGE_INIT: &str = include_str!("../../chatter_bridge/__init__.py");
 const BRIDGE_ENGINES_INIT: &str = include_str!("../../chatter_bridge/engines/__init__.py");
@@ -280,6 +284,41 @@ pub fn install_chatterbox_deps() -> Result<(), BridgeError> {
         }
     }
 
+    // Step 4: Re-assert NumPy/SciPy pins last — mlx-audio or transitive deps can
+    // upgrade to incompatible pairs that break `import scipy.special`.
+    reinstall_pinned_numpy_scipy()?;
+
+    Ok(())
+}
+
+/// Force the known-good NumPy/SciPy pair (matches `requirements-mlx.txt`).
+/// Call after ChatterBox install or from `doctor --fix` when imports fail.
+pub fn reinstall_pinned_numpy_scipy() -> Result<(), BridgeError> {
+    let venv = venv_path()?;
+    let pip = venv_python_path(&venv);
+    let numpy_spec = format!("numpy=={PIN_NUMPY}");
+    let scipy_spec = format!("scipy=={PIN_SCIPY}");
+
+    let output = Command::new(&pip)
+        .args([
+            "-m",
+            "pip",
+            "install",
+            "--no-cache-dir",
+            numpy_spec.as_str(),
+            scipy_spec.as_str(),
+        ])
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| BridgeError::Other(format!("Failed to run pip: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(BridgeError::Other(format!(
+            "Failed to pin numpy/scipy: {stderr}"
+        )));
+    }
     Ok(())
 }
 

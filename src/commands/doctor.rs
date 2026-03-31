@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use crate::bridge;
 use crate::bridge::doctor::get_system_info;
 use crate::bridge::runtime::ComputeBackend;
-use crate::bridge::venv::install_chatterbox_deps;
+use crate::bridge::venv::{install_chatterbox_deps, reinstall_pinned_numpy_scipy};
 use crate::cli::{DoctorArgs, GlobalArgs};
 use crate::ui;
 
@@ -307,8 +307,27 @@ pub fn run(args: DoctorArgs, global: &GlobalArgs) -> anyhow::Result<()> {
     // --fix: auto-download models if missing
     if args.fix && venv_ok {
         let spinner = ui::create_spinner("Checking environment");
-        let info = get_system_info();
+        let mut info = get_system_info();
         spinner.finish_and_clear();
+
+        // Repair broken NumPy/SciPy ABI (e.g. scipy.special MultiUFunc errors) before other fixes.
+        if !info.python_imports_ok {
+            println!();
+            let spinner = ui::create_spinner("Repairing NumPy/SciPy pins");
+            match reinstall_pinned_numpy_scipy() {
+                Ok(()) => {
+                    spinner.finish_with_message("NumPy/SciPy pinned to known-good versions");
+                    info = get_system_info();
+                }
+                Err(e) => {
+                    spinner.abandon_with_message("NumPy/SciPy repair failed");
+                    println!(
+                        "Warning: could not reinstall pinned numpy/scipy: {e}\n\
+                         Try manually: $(brew --prefix)/Cellar/chatter/*/libexec/venv/bin/pip install numpy==2.2.6 scipy==1.16.2"
+                    );
+                }
+            }
+        }
 
         // Fix Qwen models
         if models_missing {

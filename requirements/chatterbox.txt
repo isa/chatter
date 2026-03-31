@@ -1,12 +1,13 @@
 # ChatterBox TTS curated dependencies (installed with --no-deps)
 # Excludes gradio (~200MB) which is not needed for CLI inference.
-# Uses >= instead of == to avoid downgrade conflicts with brew-installed packages.
+# numpy/scipy MUST match requirements-mlx.txt — SciPy 1.17+ can break scipy.special
+# with certain NumPy 2.x combos (sph_legendre_p / MultiUFunc ufunc errors).
 chatterbox-tts>=0.1.7
 resemble-perth
 diffusers>=0.29.0
-numpy>=1.24.0,<2.0.0
+numpy==2.2.6
 librosa>=0.11.0
-scipy
+scipy==1.16.2
 s3tokenizer
 conformer>=0.3.2
 safetensors>=0.5.3
